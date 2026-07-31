@@ -23,7 +23,7 @@ const games: Game[] = [
     title: 'Countries',
     description: 'Find every nation on an interactive globe.',
     path: '/countries-quiz',
-    eyebrow: 'Start here',
+    eyebrow: 'Assignment 001',
     artwork: 'globe',
     status: 'ready',
   },
@@ -31,7 +31,7 @@ const games: Game[] = [
     title: 'Capital cities',
     description: 'Match the city to its place on the map.',
     path: '/capitals-quiz',
-    eyebrow: 'Coming soon',
+    eyebrow: 'Department 002',
     artwork: 'capitals',
     status: 'soon',
   },
@@ -39,7 +39,7 @@ const games: Game[] = [
     title: 'Flags',
     description: 'Learn the colours and symbols of the world.',
     path: '/flags-quiz',
-    eyebrow: 'Coming soon',
+    eyebrow: 'Department 003',
     artwork: 'flags',
     status: 'soon',
   },
@@ -47,7 +47,7 @@ const games: Game[] = [
     title: 'Regions',
     description: 'Explore continents one region at a time.',
     path: '/regions-quiz',
-    eyebrow: 'Coming soon',
+    eyebrow: 'Department 004',
     artwork: 'regions',
     status: 'soon',
   },
@@ -55,7 +55,7 @@ const games: Game[] = [
     title: 'Landmarks',
     description: 'Place iconic wonders around the globe.',
     path: '/landmarks-quiz',
-    eyebrow: 'Coming soon',
+    eyebrow: 'Department 005',
     artwork: 'landmarks',
     status: 'soon',
   },
@@ -63,7 +63,7 @@ const games: Game[] = [
     title: 'Mountains & rivers',
     description: 'Trace the features that shape our planet.',
     path: '/features-quiz',
-    eyebrow: 'Coming soon',
+    eyebrow: 'Department 006',
     artwork: 'mountains',
     status: 'soon',
   },
@@ -195,21 +195,29 @@ function Home({ setPath }: { setPath: (path: string) => void }) {
   return (
     <main>
       <section class="intro" aria-labelledby="page-title">
-        <p class="kicker">Learn the world, one place at a time</p>
-        <h1 id="page-title">Where will you explore?</h1>
+        <div class="registry-heading">
+          <p class="kicker">World Registry · Clerk station 01</p>
+          <span class="registry-stamp">Active</span>
+        </div>
+        <h1 id="page-title">Geographic registry</h1>
         <p class="intro-copy">
-          Short, focused geography games that remember what you know and bring
-          back what you don't.
+          Process short assignments, verify places, and build a permanent
+          working record of the world.
         </p>
+        <dl class="registry-status">
+          <div><dt>Clerk</dt><dd>Junior atlas clerk</dd></div>
+          <div><dt>Record</dt><dd>Stored on this device</dd></div>
+          <div><dt>Network</dt><dd>Offline capable</dd></div>
+        </dl>
       </section>
 
       <section class="game-section" aria-labelledby="game-heading">
         <div class="section-heading">
           <div>
-            <p class="section-label">Your atlas</p>
-            <h2 id="game-heading">Choose a minigame</h2>
+            <p class="section-label">Assignment register</p>
+            <h2 id="game-heading">Open files</h2>
           </div>
-          <p>More ways to explore are on the way.</p>
+          <p>Select one file for processing. Sealed departments are not yet operational.</p>
         </div>
 
         <div class="game-grid">
@@ -228,13 +236,13 @@ function Home({ setPath }: { setPath: (path: string) => void }) {
               <div class="card-body">
                 <div class="card-meta">
                   <span>{game.eyebrow}</span>
-                  {game.status === 'ready' ? <span class="ready-dot">Ready</span> : null}
+                  {game.status === 'ready' ? <span class="ready-dot">Issued</span> : <span>Sealed</span>}
                 </div>
                 <h3>{game.title}</h3>
                 <p>{game.description}</p>
                 <span class="card-action">
-                  {game.status === 'ready' ? 'Play now' : 'Preview'}
-                  <span aria-hidden="true">↗</span>
+                  {game.status === 'ready' ? 'Open assignment' : 'Inspect file'}
+                  <span aria-hidden="true">→</span>
                 </span>
               </div>
             </a>
@@ -352,7 +360,7 @@ export function App() {
       )}
       <footer>
         <Brand />
-        <p>Learn the shape of your world.</p>
+        <p>World Registry · Local archive</p>
       </footer>
     </div>
   )

@@ -1,7 +1,7 @@
 # GeoBam Architectural Design
 
 Status: Initial planning draft
-Last updated: 2026-07-29
+Last updated: 2026-07-31
 
 ## 1. Product overview
 
@@ -60,9 +60,8 @@ The first minigame teaches the locations and names of countries and territories 
 - Typed questions have no autocomplete.
 - XP determines the player's visible, indefinitely increasing minigame level.
 - Detailed per-country performance is collected for scheduling but not exposed until a future statistics explorer.
-- Correct answers trigger a prominent visual XP-orb reward animation; the initial release has no sound or haptic feedback.
+- Correct answers trigger prominent XP and progress feedback; the initial release has no sound or haptic feedback.
 - Analytics and telemetry are out of scope for the initial release.
-- The UI supports light, dark, and system theme settings; system follows the CSS color-scheme media query.
 
 ## 3. Experience architecture
 
@@ -75,7 +74,7 @@ The first minigame teaches the locations and names of countries and territories 
 | `/games/countries/play` | Active country practice session |
 | `/games/capitals` | Capital cities placeholder and, later, game introduction |
 | `/downloads` | Install, update, or remove offline minigame packs and show their storage usage |
-| `/settings` | Theme, accessibility, reduced motion, and local-data controls |
+| `/settings` | Accessibility, reduced motion, and local-data controls |
 
 Routing should remain client-side for the initial static application.
 
@@ -90,13 +89,12 @@ The dashboard is the home of the overall progression system. It should show:
 - A suggested activity based on due review items, without punishing players for missing a day.
 - The offline availability and download state of each minigame.
 
-### Visual direction
+### Visual design
 
-The interface should be minimalist, modern, and restrained. Controls, typography, progress, and navigation should feel sleek and uncluttered. The globe and geographic artwork should provide the richness: polished, artful, and subtly inspired by expensive antique maps without looking old-fashioned.
-
-The two layers should share a deliberate palette and typography so the map does not feel embedded from a different product. Prefer refined cartographic texture, elegant borders, restrained depth, and high-quality lighting over ornamental clutter. Readability, geographic accuracy, accessibility, and rendering performance take priority over decorative detail.
-
-Both light and dark themes should preserve this direction. The player can choose `light`, `dark`, or `system`; `system` follows `prefers-color-scheme` and responds when the operating-system preference changes.
+Visual language, interface personality, presentation, and design decisions are
+defined in [`DESIGN_DIRECTION.md`](./DESIGN_DIRECTION.md). The architecture
+document retains only technical, functional, performance, and accessibility
+constraints that affect implementation.
 
 ### Typical learning loop
 
@@ -427,17 +425,16 @@ Each country stores an expected typing-time rating and a rarity rating. Persist 
 
 Speed praise such as “Very quick!”, “Amazing!”, “Insanely fast!”, or “Blazingly fast!” should appear only when the calibrated threshold is meaningfully exceeded. Ordinary answers receive no speed label.
 
-### Correct-answer reward animation
+### Correct-answer reward feedback
 
-A correct answer should emit animated XP orbs from the highlighted country. The orbs travel toward a persistent level badge containing the current level number and an adjacent XP progress bar. As the orbs arrive, the bar fills with responsive motion and the level-up state receives a stronger celebratory treatment.
-
-The animation must:
+The visual expression of XP rewards is defined in `DESIGN_DIRECTION.md`. The
+implementation must:
 
 - Begin promptly without delaying the next interaction.
 - Reflect the actual XP awarded after mistake and hint reductions.
-- Remain legible over both light and dark globe treatments.
-- Collapse to a short, low-motion state when reduced motion is enabled.
-- Have an equivalent numeric and text update so meaning never depends on animation.
+- Remain legible over supported globe treatments.
+- Provide a low-motion state when reduced motion is enabled.
+- Have equivalent numeric and text updates so meaning never depends on motion.
 - Use no sound or haptic feedback in the initial release.
 
 ## 7. Minigame 1: Countries and territories
@@ -679,8 +676,7 @@ Use deterministic clocks and seeded randomness so scheduling and question genera
 - Download, update, remove, interrupted-download, and insufficient-storage states.
 - Installed games complete sessions while the browser is forced offline.
 - Starter country levels become playable before the complete background download finishes.
-- Theme selection follows light, dark, and changing system preferences.
-- XP-orb feedback updates the badge and bar and respects reduced motion.
+- XP reward feedback updates progress and respects reduced motion.
 
 ### End-to-end tests
 
@@ -698,7 +694,7 @@ Visual and interaction testing of the globe should include tiny countries, islan
 ### Phase 0: Resolve foundations
 
 - Confirm the launch geography catalogue and boundary dataset.
-- Define visual direction and accessibility baseline.
+- Establish the visual direction in `DESIGN_DIRECTION.md` and define the accessibility baseline.
 - Choose routing and testing libraries compatible with Preact.
 - Finalize the indefinitely scaling XP curve and scheduler parameters.
 - Define the initial Western-familiarity curriculum bands.
@@ -719,8 +715,7 @@ Visual and interaction testing of the globe should include tiny countries, islan
 - Implement mastery records and scheduler.
 - Implement session controller and delayed retry queue.
 - Build shared multiple-choice, typed input, feedback, and summary UI.
-- Implement the level badge, XP bar, and accessible orb reward animation.
-- Add light, dark, and system theming.
+- Implement accessible XP and level-progress feedback following `DESIGN_DIRECTION.md`.
 - Add deterministic tests.
 
 ### Phase 3: Country game
@@ -743,7 +738,7 @@ Visual and interaction testing of the globe should include tiny countries, islan
 ### Phase 5: Hardening and launch
 
 - Accessibility audit.
-- Visual-quality review across the minimalist interface and antique-map-inspired globe.
+- Visual-quality review against `DESIGN_DIRECTION.md`.
 - Mobile performance and memory testing.
 - PWA install, update, storage-pressure, and offline testing.
 - Persistence migration and recovery testing.
@@ -773,8 +768,6 @@ Visual and interaction testing of the globe should include tiny countries, islan
 | ADR-017 | Use 10-question rounds that require every miss to be resolved | Accepted | Creates short milestones while ensuring correction rather than skipping |
 | ADR-018 | Derive unlimited minigame levels from XP | Accepted | Provides a simple visible progression system without a terminal cap |
 | ADR-019 | Keep detailed country mastery internal initially | Accepted | Supports scheduling now and a future statistics explorer without cluttering the first UI |
-| ADR-020 | Use visual-only XP-orb rewards | Accepted | Makes correct answers satisfying without adding sound or haptic scope |
-| ADR-021 | Support light, dark, and system themes | Accepted | Respects player and operating-system preferences |
 | ADR-022 | Exclude initial analytics and telemetry | Accepted | Keeps the first release local and privacy-conscious |
 | ADR-023 | Activate app updates automatically only at safe boundaries | Accepted | Keeps the app current without reloading during an active round |
 
@@ -816,8 +809,7 @@ These decisions should be resolved near the phase that needs them:
 - Every round begins with 10 scheduled questions and cannot finish until all missed items are answered correctly.
 - The globe remains freely rotatable and zoomable and provides a return-to-country control.
 - Tiny countries receive an additional visible outline or circle.
-- Correct answers animate XP orbs into the current-level badge and progress bar, with a reduced-motion alternative.
-- Light, dark, and system theme modes work across the application and globe.
+- Correct answers provide clear XP and level-progress feedback with a reduced-motion alternative.
 - Progress survives browser reloads.
 - The app shell and downloaded country game work fully offline, including reloads and complete sessions.
 - Removing a downloaded game does not remove its XP or mastery records.

@@ -455,9 +455,9 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
           })}
         </div>
         <span class="round-medallion">10</span>
-        <p class="kicker">Round complete</p>
-        <h1>Nicely mapped.</h1>
-        <p>You resolved every country in this round and earned progress toward level {level + 1}.</p>
+        <p class="kicker">Batch verified · 10 / 10 filed</p>
+        <h1>Record cleared.</h1>
+        <p>Every country in this batch has been resolved. Your registry record now advances toward level {level + 1}.</p>
         <div class="round-actions">
           <button
             ref={nextRoundButtonRef}
@@ -465,10 +465,10 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
             class="primary-button next-round-button"
             onClick={beginNextRound}
           >
-            Next round
+            Next batch
             <kbd>Enter</kbd>
           </button>
-          <a class="secondary-button" href="/">Back to title</a>
+          <a class="secondary-button" href="/">Return to registry</a>
         </div>
       </section>
     )
@@ -481,7 +481,7 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
       <div class="quiz-topline">
         <div>
           <span>
-            Countries · Level {level} · {activeRoundMode === 'typed' ? 'Typed recall' : 'Multiple choice'}
+            File 001 · Countries · Level {level} · {activeRoundMode === 'typed' ? 'Typed verification' : 'Visual verification'}
           </span>
           <strong>{completed} / 10 resolved</strong>
         </div>
@@ -522,7 +522,7 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
               if (typedAnswer.trim()) submitAnswer(typedAnswer)
             }}
           >
-            <label for="country-answer">Country name</label>
+            <label for="country-answer">Enter registered country name</label>
             <div>
               <input
                 ref={typedInputRef}
@@ -533,7 +533,7 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
                 disabled={isTransitioning}
                 class={feedback ? `answer-field--${feedback.status}` : ''}
               />
-              <button type="submit" disabled={isTransitioning}>Check answer</button>
+              <button type="submit" disabled={isTransitioning}>Verify</button>
             </div>
           </form>
         ) : (
