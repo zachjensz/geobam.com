@@ -1,0 +1,18 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "geobam",
+  "compatibility_date": "2026-07-31",
+  "routes": [
+    {
+      "pattern": "geobam.com",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.geobam.com",
+      "custom_domain": true
+    }
+  ],
+  "assets": {
+    "not_found_handling": "single-page-application"
+  }
+}
