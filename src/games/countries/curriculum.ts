@@ -67,7 +67,7 @@ function rarityFor(country: (typeof worldCountries)[number]): 1 | 2 | 3 | 4 | 5 
 }
 
 const orderedCountries = worldCountries
-  .filter((country) => country.unMember || country.name.common === 'Bermuda')
+  .filter((country) => country.unMember)
   .sort((first, second) => {
     const firstKnown = familiarOrder.indexOf(first.name.common)
     const secondKnown = familiarOrder.indexOf(second.name.common)
