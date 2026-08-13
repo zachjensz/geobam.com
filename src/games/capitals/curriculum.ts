@@ -16,7 +16,6 @@ export type Capital = {
   averageTypingMs: number
   clue: string
   focus: [longitude: number, latitude: number]
-  highlightHostCountry: boolean
 }
 
 const aliasOverrides: Record<string, string[]> = {
@@ -116,7 +115,6 @@ export const capitalCurriculum: Capital[] = orderedCountries.map((country, index
     averageTypingMs: Math.min(6_500, 850 + letters * 165 + (name.split(' ').length - 1) * 180),
     clue: clueOverrides[name] ?? `It is the capital of ${country.name.common}.`,
     focus: capitalCoordinates[country.ccn3],
-    highlightHostCountry: rarityFor(country) === 1,
   }
 })
 

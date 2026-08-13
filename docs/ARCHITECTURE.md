@@ -630,10 +630,9 @@ A reverse mode—given a capital name, identify the country—is deferred.
 
 1. Select a capital using the shared round scheduler and Western-familiarity curriculum.
 2. Orient the globe on that city's coordinates.
-3. Draw a dot for every catalogue capital; emphasize the target with a gold marker and forest ring.
-4. For the most familiar Western band (`rarity === 1`), also highlight the host country as an early clue.
-5. Accept a multiple-choice city name or a typed response with shared fuzzy matching.
-6. After a miss, hint with the host country before escalating to name-shape hints in typed mode.
+3. Draw a tiny dot for every catalogue capital. Mark the target with a smaller gold dot and no ring or country fill.
+4. Accept a multiple-choice city name or a typed response with shared fuzzy matching.
+5. After a miss, hint with the host country before escalating to name-shape hints in typed mode.
 
 ### Content rules
 
@@ -779,9 +778,10 @@ Visual and interaction testing of the globe should include tiny countries, islan
 | ADR-026 | Reuse the countries Western-familiarity order for capitals | Accepted | Starts with Washington, London, Paris and the same later African/Pacific ramp |
 | ADR-027 | Accept spelling aliases of the dotted city, not distant other capitals | Accepted | The dot is a location; a far-away second capital would be geographically wrong |
 | ADR-028 | Share answer matching, round scheduling, and the quiz shell | Accepted | Prevents the second minigame from forking progression and fuzzy-match rules |
-| ADR-029 | Highlight the host country only for rarity-1 capitals | Accepted | Early Western items get a country cue; later items are dots only |
+| ADR-029 | Highlight the host country only for rarity-1 capitals | Superseded by ADR-032 | Early Western items originally got a country cue |
 | ADR-030 | Vendor Natural Earth capital coordinates with three overrides | Accepted | `world-countries` v5 no longer ships `capitalInfo`, and the game must work offline |
 | ADR-031 | Store capitals mastery separately from countries | Accepted | Naming a country and naming its capital are different skills |
+| ADR-032 | Capitals use small gold target dots, tiny context dots, and no country fill or ring | Accepted | Country highlight and the green ring made the target too obvious and unlike a city marker |
 
 ## 12. Open decisions
 

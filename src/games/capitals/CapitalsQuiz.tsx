@@ -29,11 +29,7 @@ export function CapitalsQuiz({ xp, onEarnXp, onUpdateSafePoint }: CapitalsQuizPr
         typedInputId: 'capital-answer',
       }}
       optionsFor={(capital) => capitalOptions(capital, Math.max(2, capital.level))}
-      preloadNext={(capital) => preloadCountryMap(
-        capital.countryId,
-        false,
-        capital.highlightHostCountry,
-      )}
+      preloadNext={(capital) => preloadCountryMap(capital.countryId, false, false)}
       renderGlobe={(capital, resetSignal, onTargetPosition) => (
         <CountryGlobe
           countryId={capital.countryId}
@@ -42,7 +38,7 @@ export function CapitalsQuiz({ xp, onEarnXp, onUpdateSafePoint }: CapitalsQuizPr
           showSmallCountryMarker={false}
           isIslandNation={false}
           showIslandEnvelope={false}
-          highlightCountry={capital.highlightHostCountry}
+          highlightCountry={false}
           markers={capitalMarkers(capital.id)}
           cameraDistance={5.6}
           resetSignal={resetSignal}

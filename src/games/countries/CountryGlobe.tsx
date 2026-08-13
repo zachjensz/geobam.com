@@ -363,19 +363,14 @@ function createMapTexture(
 }
 
 function addCapitalMarkers(globe: THREE.Group, markers: GlobeMarker[]) {
-  const contextGeometry = new THREE.CircleGeometry(0.015, 12)
-  const targetGeometry = new THREE.CircleGeometry(0.038, 20)
-  const ringGeometry = new THREE.RingGeometry(0.048, 0.068, 28)
+  const contextGeometry = new THREE.CircleGeometry(0.004, 10)
+  const targetGeometry = new THREE.CircleGeometry(0.01, 16)
   const contextMaterial = new THREE.MeshBasicMaterial({
     color: 0x243330,
     side: THREE.DoubleSide,
   })
   const targetMaterial = new THREE.MeshBasicMaterial({
     color: 0xd0a34e,
-    side: THREE.DoubleSide,
-  })
-  const ringMaterial = new THREE.MeshBasicMaterial({
-    color: 0x315d43,
     side: THREE.DoubleSide,
   })
 
@@ -389,13 +384,6 @@ function addCapitalMarkers(globe: THREE.Group, markers: GlobeMarker[]) {
     dot.position.copy(point.clone().multiplyScalar(GLOBE_RADIUS + 0.012))
     dot.lookAt(point.clone().multiplyScalar(4))
     globe.add(dot)
-
-    if (isTarget) {
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial)
-      ring.position.copy(point.clone().multiplyScalar(GLOBE_RADIUS + 0.014))
-      ring.lookAt(point.clone().multiplyScalar(4))
-      globe.add(ring)
-    }
   })
 }
 
