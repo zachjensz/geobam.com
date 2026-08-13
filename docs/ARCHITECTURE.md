@@ -1,7 +1,7 @@
 # GeoBam Architectural Design
 
 Status: Initial planning draft
-Last updated: 2026-07-31
+Last updated: 2026-08-13
 
 ## 1. Product overview
 
@@ -124,7 +124,7 @@ Preact UI
 │   ├── Country question generator
 │   └── Three.js globe
 └── Capital cities game
-    └── Placeholder, then capital question generator
+    └── Capital question generator and globe markers
 
 Domain layer
 ├── Geography catalogue
@@ -165,7 +165,8 @@ src/
 │   │   ├── questions/
 │   │   └── countryGame.ts
 │   └── capitals/
-│       └── capitalGame.ts
+│       ├── CapitalsQuiz.tsx
+│       └── curriculum.ts
 ├── persistence/
 │   ├── ProgressRepository.ts
 │   └── indexedDb/
@@ -617,32 +618,35 @@ Targets should be validated on a representative mid-range mobile device:
 - Geometry resolution selected to balance recognizable borders and download size.
 - The country pack exposes its download size before installation and runs without network requests once installed.
 
-## 8. Minigame 2: Capital cities placeholder
+## 8. Minigame 2: Capital cities
 
-### Proposed learning objective
+### Learning objective
 
-Given a country or territory, identify its capital city. A reverse mode—given a capital, identify the geography—can be introduced later.
+Given a marked capital-city location on the globe, identify the city name. The player progresses from four-option recognition to unaided typed recall, using the same scheduling rules as countries.
 
-### Expected reuse
+A reverse mode—given a capital name, identify the country—is deferred.
 
-The capitals game should reuse:
+### Question flow
 
-- The shared session controller.
-- The same mastery and spaced-repetition records.
-- Multiple-choice-to-typed progression.
-- XP and per-game levels.
-- Geography catalogue IDs and naming rules.
-- Shared question, feedback, and summary components.
+1. Select a capital using the shared round scheduler and Western-familiarity curriculum.
+2. Orient the globe on that city's coordinates.
+3. Draw a dot for every catalogue capital; emphasize the target with a gold marker and forest ring.
+4. For the most familiar Western band (`rarity === 1`), also highlight the host country as an early clue.
+5. Accept a multiple-choice city name or a typed response with shared fuzzy matching.
+6. After a miss, hint with the host country before escalating to name-shape hints in typed mode.
 
-### Content considerations for later design
+### Content rules
 
-- Geographies with multiple capitals or different official and administrative capitals.
-- Territories without a conventional capital.
-- Accepted spelling variants and diacritics.
-- Whether the globe is used as context or the game begins as text/cards.
-- Whether country-to-capital and capital-to-country are separate mastery items.
+- The playable catalogue matches the countries game: UN members in `world-countries`, including Vatican City as currently flagged there, excluding Palestine.
+- The canonical answer is `world-countries` `capital[0]`, placed at that city's coordinates.
+- Spelling, diacritic, and short-name aliases of the same city are accepted.
+- A different city is not accepted merely because it is also a capital of the same country. Cape Town is not Pretoria; The Hague is not Amsterdam; La Paz is not Sucre.
+- Adjacent twin-capital names that occupy the same metro area at globe scale are accepted as aliases: Colombo/Kotte, Lobamba/Mbabane, Ngerulmud/Melekeok.
+- Coordinates come from Natural Earth 110m populated places, with explicit overrides for Yaren, Gitega, and Ngerulmud.
 
-For the first project milestone, the route and dashboard card may be marked `coming-soon` without implementing question generation.
+### Shared logic
+
+Countries and capitals share answer normalization, bounded fuzzy matching, name-pattern hints, round construction, XP speed rewards, and the `LocationQuiz` session shell. Each game keeps its own curriculum, globe presentation, storage keys, and copy.
 
 ## 9. Testing strategy
 
@@ -729,11 +733,11 @@ Visual and interaction testing of the globe should include tiny countries, islan
 - Handle small geographies and WebGL fallback.
 - Playtest and tune scheduling, cues, XP, and session length.
 
-### Phase 4: Capital cities placeholder
+### Phase 4: Capital cities
 
-- Add the dashboard card and route.
-- Document intended shared content relationships.
-- Show an honest coming-soon state.
+- Add the dashboard card and `/capitals-quiz` route.
+- Share answer matching, round scheduling, and the quiz shell with countries.
+- Show capital-city dots on the globe, starting with Western cities such as Paris.
 
 ### Phase 5: Hardening and launch
 
@@ -770,6 +774,14 @@ Visual and interaction testing of the globe should include tiny countries, islan
 | ADR-019 | Keep detailed country mastery internal initially | Accepted | Supports scheduling now and a future statistics explorer without cluttering the first UI |
 | ADR-022 | Exclude initial analytics and telemetry | Accepted | Keeps the first release local and privacy-conscious |
 | ADR-023 | Activate app updates automatically only at safe boundaries | Accepted | Keeps the app current without reloading during an active round |
+| ADR-024 | Capitals ask the player to name the marked city, not the host country | Accepted | Matches the countries mechanic, the dashboard copy, and the request for capital-city dots such as Paris |
+| ADR-025 | Render every capital as a globe dot and emphasize the target | Accepted | Makes the map a capital-cities plate while still identifying one answer |
+| ADR-026 | Reuse the countries Western-familiarity order for capitals | Accepted | Starts with Washington, London, Paris and the same later African/Pacific ramp |
+| ADR-027 | Accept spelling aliases of the dotted city, not distant other capitals | Accepted | The dot is a location; a far-away second capital would be geographically wrong |
+| ADR-028 | Share answer matching, round scheduling, and the quiz shell | Accepted | Prevents the second minigame from forking progression and fuzzy-match rules |
+| ADR-029 | Highlight the host country only for rarity-1 capitals | Accepted | Early Western items get a country cue; later items are dots only |
+| ADR-030 | Vendor Natural Earth capital coordinates with three overrides | Accepted | `world-countries` v5 no longer ships `capitalInfo`, and the game must work offline |
+| ADR-031 | Store capitals mastery separately from countries | Accepted | Naming a country and naming its capital are different skills |
 
 ## 12. Open decisions
 
@@ -785,14 +797,14 @@ These decisions should be resolved near the phase that needs them:
 - Attempt thresholds for revealing name length, word boundaries, and individual letters.
 - Design of a future daily return streak.
 - Whether a static 2D fallback is sufficient when WebGL is unavailable.
-- Capital game directionality and handling of multiple-capital cases.
+- Whether a later reverse capitals mode (city name → country) should share mastery items with this locate-the-dot mode.
 - Whether minigame packs are monolithic or optionally split into quality tiers for large visual assets.
 
 ## 13. Success criteria for the first playable release
 
 - A player can start without an account.
 - GeoBam can be installed as a PWA.
-- The dashboard shows the country game, capital cities placeholder, total XP, and country-game level.
+- The dashboard shows the country game, the capital cities game, total XP, and overall level.
 - A player can download, update, and remove individual minigame packs.
 - A first website visit caches the PWA shell and automatically begins the country pack download.
 - A player can begin the earliest country levels before the full pack finishes downloading.
