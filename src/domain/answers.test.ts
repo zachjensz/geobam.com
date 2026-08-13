@@ -28,7 +28,7 @@ describe('isAcceptedAnswer', () => {
   })
 
   it('accepts small typos on longer names', () => {
-    expect(isAcceptedAnswer(prague, 'Prauge', catalogue)).toBe(true)
+    expect(isAcceptedAnswer(prague, 'Praque', catalogue)).toBe(true)
     expect(isAcceptedAnswer(paris, 'Parris', catalogue)).toBe(true)
   })
 
