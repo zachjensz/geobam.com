@@ -145,6 +145,10 @@ export function LocationQuiz<T extends QuizItem>({
     answerStartedAtRef.current = performance.now()
   }, [question?.instanceId])
 
+  useEffect(() => () => {
+    document.documentElement.classList.remove('very-quick-correct')
+  }, [])
+
   useEffect(() => {
     const nextItem = queue[1]?.item
     if (!nextItem || !preloadNext) return
@@ -202,6 +206,14 @@ export function LocationQuiz<T extends QuizItem>({
       const earned = baseXp + speed.bonus
       setIsTransitioning(true)
       setFeedback({ answer, status: 'correct' })
+      if (speed.shakeScreen) {
+        document.documentElement.classList.remove('very-quick-correct')
+        void document.documentElement.offsetWidth
+        document.documentElement.classList.add('very-quick-correct')
+        window.setTimeout(() => {
+          document.documentElement.classList.remove('very-quick-correct')
+        }, 700)
+      }
       if (!typedMode) {
         setMultipleChoiceCompletions((current) => {
           const next = {
@@ -252,7 +264,7 @@ export function LocationQuiz<T extends QuizItem>({
       const targetBounds = target?.getBoundingClientRect()
       setXpBurst({
         id: Date.now(),
-        count: Math.max(2, Math.round(earned / 3)),
+        count: speed.orbCount || Math.max(4, Math.round((earned / 3) * 2)),
         start: targetPositionRef.current,
         end: targetBounds
           ? { x: targetBounds.left + targetBounds.width / 2, y: targetBounds.top + targetBounds.height / 2 }
@@ -270,7 +282,7 @@ export function LocationQuiz<T extends QuizItem>({
           setFeedback(null)
         })
       }, 850)
-      window.setTimeout(() => setXpBurst(null), 1250)
+      window.setTimeout(() => setXpBurst(null), 1800)
       return
     }
 
@@ -278,7 +290,7 @@ export function LocationQuiz<T extends QuizItem>({
     setFeedback({ answer, status: 'incorrect' })
     window.setTimeout(() => {
       setFeedback((current) => current?.status === 'incorrect' ? null : current)
-    }, 520)
+    }, 680)
     setAttempts({ ...attempts, [question.instanceId]: nextAttempts })
     if (nextAttempts === 1) {
       setMessage(`Not quite. Hint: ${question.item.clue}`)
@@ -295,7 +307,7 @@ export function LocationQuiz<T extends QuizItem>({
           nextQuestion(false)
           setIsTransitioning(false)
         })
-      }, 520)
+      }, 680)
     }
   }
 
@@ -451,7 +463,12 @@ export function LocationQuiz<T extends QuizItem>({
         )}
       </div>
       {xpBurst ? (
-        <div class="xp-burst-layer" aria-hidden="true" key={xpBurst.id}>
+        <div
+          class={`xp-burst-layer${xpBurst.count >= 48 ? ' xp-burst-layer--fast' : ''}`}
+          style={`--burst-x:${xpBurst.start.x}px;--burst-y:${xpBurst.start.y}px;`}
+          aria-hidden="true"
+          key={xpBurst.id}
+        >
           {xpBurst.praise ? (
             <strong
               class="speed-praise"
@@ -463,7 +480,7 @@ export function LocationQuiz<T extends QuizItem>({
           {Array.from({ length: xpBurst.count }, (_, index) => (
             <span
               class="xp-orb"
-              style={`--delay:${index * 45}ms;--spread-x:${((index % 4) - 1.5) * 9}px;--spread-y:${(index % 3) * -7}px;--start-x:${xpBurst.start.x}px;--start-y:${xpBurst.start.y}px;--end-x:${xpBurst.end.x}px;--end-y:${xpBurst.end.y}px;`}
+              style={`--delay:${Math.min(index * 18, 720)}ms;--coin-size:${8 + ((index * 7) % 9)}px;--spread-x:${(((index * 47) % 21) - 10) * (xpBurst.count >= 48 ? 14 : 5)}px;--spread-y:${-12 - ((index * 31) % (xpBurst.count >= 48 ? 110 : 55))}px;--spin:${((index % 2 ? 1 : -1) * (180 + ((index * 83) % 720)))}deg;--start-x:${xpBurst.start.x}px;--start-y:${xpBurst.start.y}px;--end-x:${xpBurst.end.x}px;--end-y:${xpBurst.end.y}px;`}
             />
           ))}
         </div>

@@ -791,18 +791,18 @@ footer p {
 
 .answer-options .answer-option--correct,
 .answer-options .answer-option--correct:hover {
-  color: #17442e;
-  border-color: #61a875;
+  color: var(--registry-green-dark, #173f35);
+  border-color: var(--registry-green, #1f5547);
   background: #ccebd4;
   animation: answer-correct-pulse 520ms ease both;
 }
 
 .answer-options .answer-option--incorrect,
 .answer-options .answer-option--incorrect:hover {
-  color: #6c2824;
-  border-color: #c66d63;
+  color: var(--registry-red, #985348);
+  border-color: var(--registry-red, #985348);
   background: #f3cec9;
-  animation: answer-incorrect-shake 420ms ease both;
+  animation: answer-incorrect-shake 620ms cubic-bezier(.36, .07, .19, .97) both;
 }
 
 .typed-answer label {
@@ -839,18 +839,19 @@ footer p {
 
 .typed-answer .answer-field--correct,
 .typed-answer .answer-field--correct:focus {
-  border-color: #61a875;
+  border-color: var(--registry-green, #1f5547);
   background: #d9f0de;
-  box-shadow: inset 0 0 0 1px #61a875;
+  box-shadow: inset 0 0 0 1px var(--registry-green, #1f5547);
   animation: answer-correct-pulse 520ms ease both;
 }
 
 .typed-answer .answer-field--incorrect,
 .typed-answer .answer-field--incorrect:focus {
-  border-color: #c66d63;
+  color: var(--registry-red, #985348);
+  border-color: var(--registry-red, #985348);
   background: #f6d9d5;
-  box-shadow: inset 0 0 0 1px #c66d63;
-  animation: answer-incorrect-shake 420ms ease both;
+  box-shadow: inset 0 0 0 1px var(--registry-red, #985348);
+  animation: answer-incorrect-shake 620ms cubic-bezier(.36, .07, .19, .97) both;
 }
 
 .typed-answer button {
@@ -980,12 +981,30 @@ footer p {
   pointer-events: none;
 }
 
+.xp-burst-layer--fast::before,
+.xp-burst-layer--fast::after {
+  content: "";
+  position: absolute;
+  top: var(--burst-y);
+  left: var(--burst-x);
+  width: 42px;
+  height: 42px;
+  border: 5px double var(--registry-ochre, #bc8c48);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: xp-impact-ring 700ms cubic-bezier(.1, .7, .2, 1) both;
+}
+
+.xp-burst-layer--fast::after {
+  animation-delay: 100ms;
+}
+
 .xp-orb {
   position: absolute;
   top: 0;
   left: 0;
-  width: 11px;
-  height: 11px;
+  width: var(--coin-size, 11px);
+  height: var(--coin-size, 11px);
   border: 2px solid rgba(255, 247, 209, 0.8);
   border-radius: 50%;
   opacity: 0;
@@ -994,6 +1013,11 @@ footer p {
     0 0 8px rgba(239, 190, 88, 0.9),
     0 0 20px rgba(239, 190, 88, 0.55);
   animation: xp-orb-flight 760ms cubic-bezier(.2, .7, .25, 1) var(--delay) both;
+}
+
+.xp-burst-layer--fast .xp-orb {
+  animation-name: xp-orb-flight-fast;
+  animation-duration: 980ms;
 }
 
 .speed-praise {
@@ -1020,9 +1044,30 @@ footer p {
 
 @keyframes answer-incorrect-shake {
   0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-4px); }
-  50% { transform: translateX(4px); }
-  75% { transform: translateX(-2px); }
+  10% { transform: translateX(-10px) rotate(-.35deg); }
+  20% { transform: translateX(10px) rotate(.35deg); }
+  30% { transform: translateX(-9px) rotate(-.3deg); }
+  40% { transform: translateX(9px) rotate(.3deg); }
+  50% { transform: translateX(-7px) rotate(-.22deg); }
+  60% { transform: translateX(7px) rotate(.22deg); }
+  70% { transform: translateX(-5px) rotate(-.14deg); }
+  80% { transform: translateX(5px) rotate(.14deg); }
+  90% { transform: translateX(-2px); }
+}
+
+html.very-quick-correct body {
+  animation: very-quick-screen-shake 620ms cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes very-quick-screen-shake {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  12% { transform: translate(-5px, 2px) rotate(-.12deg); }
+  24% { transform: translate(6px, -2px) rotate(.12deg); }
+  36% { transform: translate(-6px, -1px) rotate(-.1deg); }
+  48% { transform: translate(5px, 2px) rotate(.1deg); }
+  60% { transform: translate(-4px, -2px) rotate(-.07deg); }
+  72% { transform: translate(4px, 1px) rotate(.07deg); }
+  84% { transform: translate(-2px, 0); }
 }
 
 @keyframes xp-orb-flight {
@@ -1049,6 +1094,48 @@ footer p {
   100% {
     opacity: 0;
     transform: translate(var(--end-x), var(--end-y)) scale(.25);
+  }
+}
+
+@keyframes xp-orb-flight-fast {
+  0% {
+    opacity: 0;
+    transform: translate(var(--start-x), var(--start-y)) rotate(0) scale(.15);
+  }
+  10% {
+    opacity: 1;
+  }
+  38% {
+    opacity: 1;
+    transform: translate(
+      calc(var(--start-x) + var(--spread-x)),
+      calc(var(--start-y) + var(--spread-y))
+    ) rotate(var(--spin)) scale(1.35);
+  }
+  58% {
+    opacity: 1;
+    transform: translate(
+      calc(var(--start-x) + var(--spread-x)),
+      calc(var(--start-y) + var(--spread-y) + 22px)
+    ) rotate(var(--spin)) scale(1);
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--end-x), var(--end-y)) rotate(var(--spin)) scale(.2);
+  }
+}
+
+@keyframes xp-impact-ring {
+  0% {
+    opacity: .95;
+    transform: translate(-50%, -50%) scale(.15) rotate(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(5.5) rotate(35deg);
   }
 }
 
@@ -2097,18 +2184,18 @@ footer p {
 
 .answer-options .answer-option--correct,
 .answer-options .answer-option--correct:hover {
-  color: #203b2d;
-  border-color: #31573f;
+  color: var(--registry-green-dark);
+  border-color: var(--registry-green);
   background: #a9c09d;
-  box-shadow: inset 7px 0 0 #3e6a4c, 3px 3px 0 #66725f;
+  box-shadow: inset 7px 0 0 var(--registry-green), 3px 3px 0 #66725f;
 }
 
 .answer-options .answer-option--incorrect,
 .answer-options .answer-option--incorrect:hover {
-  color: #5c2925;
-  border-color: #763d36;
+  color: var(--registry-red);
+  border-color: var(--registry-red);
   background: #d6aaa0;
-  box-shadow: inset 7px 0 0 #984f45, 3px 3px 0 #7a5e55;
+  box-shadow: inset 7px 0 0 var(--registry-red), 3px 3px 0 #7a5e55;
 }
 
 .typed-answer label {
@@ -2226,12 +2313,23 @@ footer p {
 }
 
 .xp-orb {
-  width: 10px;
-  height: 10px;
+  width: var(--coin-size, 10px);
+  height: var(--coin-size, 10px);
   border: 2px solid #382f21;
   border-radius: 0;
-  background: var(--registry-ochre);
-  box-shadow: 2px 2px 0 rgba(44, 37, 27, .45);
+  background:
+    linear-gradient(135deg, rgba(255, 239, 174, .8) 0 18%, transparent 19%),
+    var(--registry-ochre);
+  box-shadow:
+    2px 2px 0 rgba(44, 37, 27, .55),
+    0 0 12px rgba(214, 155, 71, .5);
+}
+
+.xp-burst-layer--fast .xp-orb {
+  border-width: 3px;
+  box-shadow:
+    3px 3px 0 rgba(44, 37, 27, .58),
+    0 0 18px rgba(230, 174, 83, .85);
 }
 
 .speed-praise {

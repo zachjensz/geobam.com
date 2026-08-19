@@ -125,18 +125,20 @@ export function speedReward(
   typedMode: boolean,
   incorrectAttempts: number,
 ) {
-  if (incorrectAttempts > 0 || responseMs < 550) return { bonus: 0, praise: '' }
+  if (incorrectAttempts > 0 || responseMs < 550) {
+    return { bonus: 0, praise: '', shakeScreen: false, orbCount: 0 }
+  }
   const expectedMs = typedMode
     ? item.averageTypingMs
     : Math.max(3_200, item.averageTypingMs * 0.65 + item.rarity * 180)
   const ratio = responseMs / expectedMs
 
-  if (ratio <= 0.3) return { bonus: 12, praise: 'Blazingly fast!' }
-  if (ratio <= 0.42) return { bonus: 9, praise: 'Insanely fast!' }
-  if (ratio <= 0.56) return { bonus: 7, praise: 'Amazing!' }
-  if (ratio <= 0.7) return { bonus: 5, praise: 'Very quick!' }
-  if (ratio <= 0.82) return { bonus: 3, praise: 'Good job!' }
-  return { bonus: 0, praise: '' }
+  if (ratio <= 0.3) return { bonus: 12, praise: 'Blazingly fast!', shakeScreen: true, orbCount: 240 }
+  if (ratio <= 0.42) return { bonus: 9, praise: 'Insanely fast!', shakeScreen: true, orbCount: 180 }
+  if (ratio <= 0.56) return { bonus: 7, praise: 'Amazing!', shakeScreen: true, orbCount: 120 }
+  if (ratio <= 0.7) return { bonus: 5, praise: 'Very quick!', shakeScreen: true, orbCount: 80 }
+  if (ratio <= 0.82) return { bonus: 3, praise: 'Good job!', shakeScreen: false, orbCount: 48 }
+  return { bonus: 0, praise: '', shakeScreen: false, orbCount: 0 }
 }
 
 export function loadJsonRecord<T>(key: string): Record<string, T> {
