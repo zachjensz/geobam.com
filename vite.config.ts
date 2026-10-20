@@ -1,7 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import preact from '@preact/preset-vite'
 import { VitePWA } from 'vite-plugin-pwa'
-import { cloudflare } from '@cloudflare/vite-plugin'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -85,12 +84,51 @@ export default defineConfig({
         skipWaiting: false,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{html,js,css,svg,png,json,webp,woff2}'],
-        globIgnores: ['wrangler.json', '.assetsignore'],
+        // Quiz chunks (and their vendor chunks) are lazy-loaded on demand, so
+        // precaching them would force first-visit users who never open a quiz
+        // to download ~1.4 MB of JavaScript on service worker install. They
+        // are cached at runtime (see runtimeCaching) after their first load.
+        globIgnores: [
+          'wrangler.json',
+          '.assetsignore',
+          'assets/familiarity-*.js',
+          'assets/*Quiz-*.js',
+          'assets/three-*.js',
+          'assets/topojson-client-*.js',
+        ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        runtimeCaching: [
+          {
+            // Hashed, immutable JS assets (entry + lazy chunks) — serve from
+            // cache first so quizzes work offline after their first online load.
+            urlPattern: /^\/assets\/.*\.js$/,
+            handler: 'CacheFirst',
+          },
+        ],
       },
     }),
-    cloudflare(),
   ],
+  build: {
+    target: 'es2023',
+    sourcemap: false,
+    chunkSizeWarningLimit: 900,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'three',
+              test: /node_modules[\\/]three[\\/]/,
+            },
+            {
+              name: 'topojson-client',
+              test: /node_modules[\\/]topojson-client[\\/]/,
+            },
+          ],
+        },
+      },
+    },
+  },
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
