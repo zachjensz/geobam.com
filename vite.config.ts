@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import preact from '@preact/preset-vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { cloudflare } from '@cloudflare/vite-plugin'
@@ -30,6 +30,19 @@ export default defineConfig({
             short_name: 'Countries',
             description: 'Start a country identification round.',
             url: '/countries-quiz',
+            icons: [
+              {
+                src: '/pwa-192.png',
+                sizes: '192x192',
+                type: 'image/png',
+              },
+            ],
+          },
+          {
+            name: 'Play Capital Cities',
+            short_name: 'Capitals',
+            description: 'Start a capital city identification round.',
+            url: '/capitals-quiz',
             icons: [
               {
                 src: '/pwa-192.png',
@@ -78,4 +91,8 @@ export default defineConfig({
     }),
     cloudflare(),
   ],
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts'],
+  },
 })

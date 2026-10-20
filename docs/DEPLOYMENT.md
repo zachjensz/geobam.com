@@ -11,7 +11,7 @@ The fallback must:
 - Preserve real asset, manifest, service-worker, and content-pack requests.
 - Return `/index.html` for unknown application routes.
 - Preserve the original browser URL so the Preact router can render the correct page.
-- Be tested using a direct request and hard refresh on `/countries-quiz`.
+- Be tested using a direct request and hard refresh on `/countries-quiz` and `/capitals-quiz`.
 
 GeoBam targets Cloudflare Workers with Static Assets through Cloudflare's official
 Vite plugin. `wrangler.jsonc` sets `assets.not_found_handling` to

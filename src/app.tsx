@@ -8,6 +8,11 @@ const CountriesQuiz = lazy(() =>
     default: module.CountriesQuiz,
   })),
 )
+const CapitalsQuiz = lazy(() =>
+  import('./games/capitals/CapitalsQuiz').then((module) => ({
+    default: module.CapitalsQuiz,
+  })),
+)
 
 type Game = {
   title: string
@@ -33,7 +38,7 @@ const games: Game[] = [
     path: '/capitals-quiz',
     eyebrow: 'Department 002',
     artwork: 'capitals',
-    status: 'soon',
+    status: 'ready',
   },
   {
     title: 'Flags',
@@ -303,17 +308,21 @@ export function App() {
       ? 'GeoBam — Learn the world'
       : path === '/countries-quiz'
         ? 'Countries Quiz — GeoBam'
-        : currentGame
-          ? `${currentGame.title} — GeoBam`
-          : 'Page not found — GeoBam'
+        : path === '/capitals-quiz'
+          ? 'Capital Cities Quiz — GeoBam'
+          : currentGame
+            ? `${currentGame.title} — GeoBam`
+            : 'Page not found — GeoBam'
 
     const description = document.querySelector<HTMLMetaElement>('meta[name="description"]')
     if (description) {
       description.content = path === '/countries-quiz'
         ? 'Identify countries on an interactive 3D globe with adaptive practice that works offline.'
-        : currentGame
-          ? currentGame.description
-          : 'Learn countries and geography through focused, adaptive minigames that work offline.'
+        : path === '/capitals-quiz'
+          ? 'Identify capital cities from their place on the globe with adaptive practice that works offline.'
+          : currentGame
+            ? currentGame.description
+            : 'Learn countries and geography through focused, adaptive minigames that work offline.'
     }
   }, [path])
 
@@ -325,13 +334,16 @@ export function App() {
     })
   }
 
+  const quizPath = path === '/countries-quiz' || path === '/capitals-quiz'
+  const Quiz = path === '/capitals-quiz' ? CapitalsQuiz : CountriesQuiz
+
   return (
     <div class="site-shell">
       <header class="site-header">
         <Brand />
         <LevelBadge xp={xp} />
       </header>
-      {path === '/' ? <Home setPath={setPath} /> : path === '/countries-quiz' ? (
+      {path === '/' ? <Home setPath={setPath} /> : quizPath ? (
         <main class="countries-page">
           <a class="back-link" href="/" onClick={(event) => navigate(event, '/', setPath)}>
             <span aria-hidden="true">←</span> All minigames
@@ -339,10 +351,10 @@ export function App() {
           <Suspense fallback={
             <div class="game-loading" role="status">
               <BrandMark />
-              <p>Preparing the globe…</p>
+              <p>{path === '/capitals-quiz' ? 'Plotting the capitals…' : 'Preparing the globe…'}</p>
             </div>
           }>
-            <CountriesQuiz
+            <Quiz
               xp={xp}
               onEarnXp={earnXp}
               onUpdateSafePoint={setServiceWorkerUpdateSafe}

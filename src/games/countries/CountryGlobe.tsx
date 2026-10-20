@@ -16,6 +16,12 @@ type FeatureCollection = {
   features: MapFeature[]
 }
 
+export type GlobeMarker = {
+  id: string
+  position: [longitude: number, latitude: number]
+  role: 'target' | 'context'
+}
+
 type CountryGlobeProps = {
   countryId: string
   countryName: string
@@ -23,6 +29,9 @@ type CountryGlobeProps = {
   showSmallCountryMarker?: boolean
   isIslandNation: boolean
   showIslandEnvelope: boolean
+  highlightCountry?: boolean
+  markers?: GlobeMarker[]
+  cameraDistance?: number
   resetSignal: number
   onTargetPosition?: (position: { x: number; y: number }) => void
 }
@@ -306,13 +315,19 @@ function getBaseMapCanvas(map: FeatureCollection) {
   return canvas
 }
 
-function renderMapCanvas(map: FeatureCollection, targetId: string, isIslandNation = false) {
+function renderMapCanvas(
+  map: FeatureCollection,
+  targetId: string,
+  isIslandNation = false,
+  highlightCountry = true,
+) {
   const canvas = document.createElement('canvas')
   canvas.width = MAP_WIDTH
   canvas.height = MAP_HEIGHT
   const context = canvas.getContext('2d')
   if (!context) return canvas
   context.drawImage(getBaseMapCanvas(map), 0, 0)
+  if (!highlightCountry) return canvas
 
   const targetLand = createLandPattern(context, '#78966f', 'rgba(54, 61, 57, 0.16)')
   const detailedTarget = detailedCountryFeatures.find((mapFeature) => mapFeature.id === targetId)
@@ -327,9 +342,14 @@ function renderMapCanvas(map: FeatureCollection, targetId: string, isIslandNatio
   return canvas
 }
 
-function createMapTexture(map: FeatureCollection, targetId: string, isIslandNation: boolean) {
-  const cacheKey = `${targetId}-${isIslandNation ? 'island' : 'land'}`
-  const canvas = mapCanvasCache.get(cacheKey) ?? renderMapCanvas(map, targetId, isIslandNation)
+function createMapTexture(
+  map: FeatureCollection,
+  targetId: string,
+  isIslandNation: boolean,
+  highlightCountry: boolean,
+) {
+  const cacheKey = `${targetId}-${isIslandNation ? 'island' : 'land'}-${highlightCountry ? 'hl' : 'base'}`
+  const canvas = mapCanvasCache.get(cacheKey) ?? renderMapCanvas(map, targetId, isIslandNation, highlightCountry)
   mapCanvasCache.delete(cacheKey)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -342,11 +362,43 @@ function createMapTexture(map: FeatureCollection, targetId: string, isIslandNati
   return texture
 }
 
-export function preloadCountryMap(targetId: string, showIslandEnvelope: boolean) {
-  const cacheKey = `${targetId}-${showIslandEnvelope ? 'island' : 'land'}`
+function addCapitalMarkers(globe: THREE.Group, markers: GlobeMarker[]) {
+  const contextGeometry = new THREE.CircleGeometry(0.004, 10)
+  const targetGeometry = new THREE.CircleGeometry(0.01, 16)
+  const contextMaterial = new THREE.MeshBasicMaterial({
+    color: 0x243330,
+    side: THREE.DoubleSide,
+  })
+  const targetMaterial = new THREE.MeshBasicMaterial({
+    color: 0xd0a34e,
+    side: THREE.DoubleSide,
+  })
+
+  markers.forEach((marker) => {
+    const point = toPoint(marker.position[0], marker.position[1], 1).normalize()
+    const isTarget = marker.role === 'target'
+    const dot = new THREE.Mesh(
+      isTarget ? targetGeometry : contextGeometry,
+      isTarget ? targetMaterial : contextMaterial,
+    )
+    dot.position.copy(point.clone().multiplyScalar(GLOBE_RADIUS + 0.012))
+    dot.lookAt(point.clone().multiplyScalar(4))
+    globe.add(dot)
+  })
+}
+
+export function preloadCountryMap(
+  targetId: string,
+  showIslandEnvelope: boolean,
+  highlightCountry = true,
+) {
+  const cacheKey = `${targetId}-${showIslandEnvelope ? 'island' : 'land'}-${highlightCountry ? 'hl' : 'base'}`
   if (mapCanvasCache.has(cacheKey)) return
   mapCanvasCache.clear()
-  mapCanvasCache.set(cacheKey, renderMapCanvas(getWorldMap(), targetId, showIslandEnvelope))
+  mapCanvasCache.set(
+    cacheKey,
+    renderMapCanvas(getWorldMap(), targetId, showIslandEnvelope, highlightCountry),
+  )
 }
 
 export function CountryGlobe({
@@ -356,6 +408,9 @@ export function CountryGlobe({
   showSmallCountryMarker = false,
   isIslandNation,
   showIslandEnvelope,
+  highlightCountry = true,
+  markers = [],
+  cameraDistance = 6.7,
   resetSignal,
   onTargetPosition,
 }: CountryGlobeProps) {
@@ -377,7 +432,7 @@ export function CountryGlobe({
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100)
-    camera.position.set(0, 0, 6.7)
+    camera.position.set(0, 0, cameraDistance)
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -388,7 +443,7 @@ export function CountryGlobe({
     host.appendChild(renderer.domElement)
 
     const map = getWorldMap()
-    const mapTexture = createMapTexture(map, countryId, showIslandEnvelope)
+    const mapTexture = createMapTexture(map, countryId, showIslandEnvelope, highlightCountry)
 
     const globe = new THREE.Group()
     const sphere = new THREE.Mesh(
@@ -399,6 +454,7 @@ export function CountryGlobe({
     scene.add(globe)
 
     const center = toPoint(focus[0], focus[1], 1).normalize()
+    if (markers.length) addCapitalMarkers(globe, markers)
     if (showSmallCountryMarker && !isIslandNation) {
       const marker = new THREE.Mesh(
         new THREE.RingGeometry(0.075, 0.105, 40),
@@ -517,6 +573,10 @@ export function CountryGlobe({
     showSmallCountryMarker,
     isIslandNation,
     showIslandEnvelope,
+    highlightCountry,
+    cameraDistance,
+    markers.find((marker) => marker.role === 'target')?.id,
+    markers.length,
   ])
 
   useEffect(() => {
