@@ -1,4 +1,4 @@
-import worldCountries from 'world-countries'
+import { worldCountries } from '../../data/countriesSlim'
 import { familiarOrder } from '../../domain/familiarity'
 import { shuffle } from '../../domain/rounds'
 

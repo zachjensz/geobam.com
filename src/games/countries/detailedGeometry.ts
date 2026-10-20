@@ -1,4 +1,4 @@
-import worldCountries from 'world-countries'
+import { worldCountries } from '../../data/countriesSlim'
 import and from 'world-countries/data/and.geo.json'
 import atg from 'world-countries/data/atg.geo.json'
 import bhr from 'world-countries/data/bhr.geo.json'
