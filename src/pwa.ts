@@ -13,7 +13,7 @@ async function activateWhenSafe() {
 }
 
 const updateServiceWorker = registerSW({
-  immediate: true,
+  immediate: false,
   onNeedRefresh() {
     // The new worker and all of its assets are already downloaded at this
     // point. Keep it waiting until gameplay reaches a safe boundary.
