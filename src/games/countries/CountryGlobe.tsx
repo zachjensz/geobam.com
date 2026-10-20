@@ -1,5 +1,22 @@
 import { useEffect, useMemo, useRef } from 'preact/hooks'
-import * as THREE from 'three'
+import {
+  CanvasTexture,
+  CircleGeometry,
+  DoubleSide,
+  Group,
+  LinearFilter,
+  MathUtils,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Quaternion,
+  RingGeometry,
+  SRGBColorSpace,
+  Scene,
+  SphereGeometry,
+  Vector3,
+  WebGLRenderer,
+} from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { feature } from 'topojson-client'
 import world from 'world-atlas/countries-110m.json'
@@ -57,9 +74,9 @@ function getWorldMap() {
 }
 
 function toPoint(longitude: number, latitude: number, radius = GLOBE_RADIUS) {
-  const phi = THREE.MathUtils.degToRad(90 - latitude)
-  const theta = THREE.MathUtils.degToRad(longitude + 180)
-  return new THREE.Vector3(
+  const phi = MathUtils.degToRad(90 - latitude)
+  const theta = MathUtils.degToRad(longitude + 180)
+  return new Vector3(
     -radius * Math.sin(phi) * Math.cos(theta),
     radius * Math.cos(phi),
     radius * Math.sin(phi) * Math.sin(theta),
@@ -186,9 +203,9 @@ function geographicEnvelope(mapFeature: MapFeature) {
   const maxLatitude = Math.max(...latitudes)
   const centerLatitude = (minLatitude + maxLatitude) / 2
   const latitudeSpan = Math.max(0.35, maxLatitude - minLatitude)
-  const surfaceLongitudeSpan = longitudeSpan * Math.max(0.18, Math.cos(THREE.MathUtils.degToRad(centerLatitude)))
+  const surfaceLongitudeSpan = longitudeSpan * Math.max(0.18, Math.cos(MathUtils.degToRad(centerLatitude)))
   const radius = Math.max(1.2, latitudeSpan / 2, surfaceLongitudeSpan / 2) + 1.25
-  const longitudeRadius = radius / Math.max(0.18, Math.cos(THREE.MathUtils.degToRad(centerLatitude)))
+  const longitudeRadius = radius / Math.max(0.18, Math.cos(MathUtils.degToRad(centerLatitude)))
 
   return { centerLongitude, centerLatitude, radius, longitudeRadius }
 }
@@ -351,33 +368,33 @@ function createMapTexture(
   const cacheKey = `${targetId}-${isIslandNation ? 'island' : 'land'}-${highlightCountry ? 'hl' : 'base'}`
   const canvas = mapCanvasCache.get(cacheKey) ?? renderMapCanvas(map, targetId, isIslandNation, highlightCountry)
   mapCanvasCache.delete(cacheKey)
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
+  const texture = new CanvasTexture(canvas)
+  texture.colorSpace = SRGBColorSpace
   // The atlas is already high resolution. Avoid allocating and generating a
   // full mip chain for every question's temporary highlighted texture.
   texture.generateMipmaps = false
-  texture.minFilter = THREE.LinearFilter
-  texture.magFilter = THREE.LinearFilter
+  texture.minFilter = LinearFilter
+  texture.magFilter = LinearFilter
   texture.anisotropy = 2
   return texture
 }
 
-function addCapitalMarkers(globe: THREE.Group, markers: GlobeMarker[]) {
-  const contextGeometry = new THREE.CircleGeometry(0.004, 10)
-  const targetGeometry = new THREE.CircleGeometry(0.01, 16)
-  const contextMaterial = new THREE.MeshBasicMaterial({
+function addCapitalMarkers(globe: Group, markers: GlobeMarker[]) {
+  const contextGeometry = new CircleGeometry(0.004, 10)
+  const targetGeometry = new CircleGeometry(0.01, 16)
+  const contextMaterial = new MeshBasicMaterial({
     color: 0x243330,
-    side: THREE.DoubleSide,
+    side: DoubleSide,
   })
-  const targetMaterial = new THREE.MeshBasicMaterial({
+  const targetMaterial = new MeshBasicMaterial({
     color: 0xd0a34e,
-    side: THREE.DoubleSide,
+    side: DoubleSide,
   })
 
   markers.forEach((marker) => {
     const point = toPoint(marker.position[0], marker.position[1], 1).normalize()
     const isTarget = marker.role === 'target'
-    const dot = new THREE.Mesh(
+    const dot = new Mesh(
       isTarget ? targetGeometry : contextGeometry,
       isTarget ? targetMaterial : contextMaterial,
     )
@@ -430,25 +447,25 @@ export function CountryGlobe({
     const host = hostRef.current
     if (!host) return
 
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100)
+    const scene = new Scene()
+    const camera = new PerspectiveCamera(38, 1, 0.1, 100)
     camera.position.set(0, 0, cameraDistance)
 
-    const renderer = new THREE.WebGLRenderer({
+    const renderer = new WebGLRenderer({
       antialias: true,
       alpha: true,
       powerPreference: 'low-power',
     })
-    renderer.outputColorSpace = THREE.SRGBColorSpace
+    renderer.outputColorSpace = SRGBColorSpace
     host.appendChild(renderer.domElement)
 
     const map = getWorldMap()
     const mapTexture = createMapTexture(map, countryId, showIslandEnvelope, highlightCountry)
 
-    const globe = new THREE.Group()
-    const sphere = new THREE.Mesh(
-      new THREE.SphereGeometry(GLOBE_RADIUS, 96, 64),
-      new THREE.MeshBasicMaterial({ map: mapTexture }),
+    const globe = new Group()
+    const sphere = new Mesh(
+      new SphereGeometry(GLOBE_RADIUS, 96, 64),
+      new MeshBasicMaterial({ map: mapTexture }),
     )
     globe.add(sphere)
     scene.add(globe)
@@ -456,11 +473,11 @@ export function CountryGlobe({
     const center = toPoint(focus[0], focus[1], 1).normalize()
     if (markers.length) addCapitalMarkers(globe, markers)
     if (showSmallCountryMarker && !isIslandNation) {
-      const marker = new THREE.Mesh(
-        new THREE.RingGeometry(0.075, 0.105, 40),
-        new THREE.MeshBasicMaterial({
+      const marker = new Mesh(
+        new RingGeometry(0.075, 0.105, 40),
+        new MeshBasicMaterial({
           color: 0x78966f,
-          side: THREE.DoubleSide,
+          side: DoubleSide,
           depthTest: false,
         }),
       )
@@ -470,14 +487,14 @@ export function CountryGlobe({
     }
 
     const yaw = Math.atan2(-center.x, center.z)
-    const yawRotation = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(0, 1, 0),
+    const yawRotation = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 1, 0),
       yaw,
     )
     const yawedCenter = center.clone().applyQuaternion(yawRotation)
     const pitch = Math.atan2(yawedCenter.y, yawedCenter.z)
-    const pitchRotation = new THREE.Quaternion().setFromAxisAngle(
-      new THREE.Vector3(1, 0, 0),
+    const pitchRotation = new Quaternion().setFromAxisAngle(
+      new Vector3(1, 0, 0),
       pitch,
     )
     globe.quaternion.copy(pitchRotation.multiply(yawRotation))
@@ -497,7 +514,7 @@ export function CountryGlobe({
     let frame = 0
     let renderRequested = false
     let disposed = false
-    const projectedTarget = new THREE.Vector3()
+    const projectedTarget = new Vector3()
 
     const render = () => {
       frame = 0
@@ -556,7 +573,7 @@ export function CountryGlobe({
       controls.dispose()
       controlsRef.current = null
       scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) {
+        if (object instanceof Mesh) {
           object.geometry.dispose()
           const materials = Array.isArray(object.material) ? object.material : [object.material]
           materials.forEach((material) => material.dispose())
