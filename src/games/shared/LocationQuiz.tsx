@@ -1,4 +1,4 @@
-import type { ComponentChildren } from 'preact'
+import type { ComponentChildren, Ref } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isAcceptedAnswer, namePattern } from '../../domain/answers'
 import {
@@ -64,6 +64,50 @@ function transitionQuestion(update: () => void) {
   transitionDocument.startViewTransition(update)
 }
 
+type TypedAnswerFormProps = {
+  inputId: string
+  label: string
+  disabled: boolean
+  feedback: { answer: string; status: 'correct' | 'incorrect' } | null
+  inputRef: Ref<HTMLInputElement>
+  onSubmit: (value: string) => void
+}
+
+function TypedAnswerForm({
+  inputId,
+  label,
+  disabled,
+  feedback,
+  inputRef,
+  onSubmit,
+}: TypedAnswerFormProps) {
+  const [value, setValue] = useState('')
+
+  return (
+    <form
+      class="typed-answer"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (value.trim()) onSubmit(value)
+      }}
+    >
+      <label for={inputId}>{label}</label>
+      <div>
+        <input
+          ref={inputRef}
+          id={inputId}
+          value={value}
+          onInput={(event) => setValue(event.currentTarget.value)}
+          autocomplete="off"
+          disabled={disabled}
+          class={feedback ? `answer-field--${feedback.status}` : ''}
+        />
+        <button type="submit" disabled={disabled}>Verify</button>
+      </div>
+    </form>
+  )
+}
+
 export function LocationQuiz<T extends QuizItem>({
   xp,
   onEarnXp,
@@ -76,11 +120,16 @@ export function LocationQuiz<T extends QuizItem>({
   preloadNext,
 }: LocationQuizProps<T>) {
   const level = Math.floor(xp / 100) + 1
+  const initialRecords = useMemo(() => {
+    const completions = loadJsonRecord<number>(storageKeys.completions)
+    const performance = loadJsonRecord<ItemPerformance>(storageKeys.performance)
+    return { completions, performance }
+  }, [])
   const [multipleChoiceCompletions, setMultipleChoiceCompletions] = useState<Record<string, number>>(
-    () => loadJsonRecord<number>(storageKeys.completions),
+    initialRecords.completions,
   )
   const [itemPerformance, setItemPerformance] = useState<Record<string, ItemPerformance>>(
-    () => loadJsonRecord<ItemPerformance>(storageKeys.performance),
+    initialRecords.performance,
   )
   const [recentResults, setRecentResults] = useState<RecentResult[]>([])
   const [activeRoundMode, setActiveRoundMode] = useState<RoundMode>('multiple-choice')
@@ -88,19 +137,20 @@ export function LocationQuiz<T extends QuizItem>({
     () => createRound(
       'multiple-choice',
       curriculum,
-      loadJsonRecord<number>(storageKeys.completions),
-      loadJsonRecord<ItemPerformance>(storageKeys.performance),
+      initialRecords.completions,
+      initialRecords.performance,
       [],
     ),
   )
   const [completed, setCompleted] = useState(0)
   const [attempts, setAttempts] = useState<Record<string, number>>({})
-  const [typedAnswer, setTypedAnswer] = useState('')
   const [message, setMessage] = useState(copy.prompt)
   const [resetSignal, setResetSignal] = useState(0)
   const [roundComplete, setRoundComplete] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [keyboardSelection, setKeyboardSelection] = useState<string | null>(null)
+  const keyboardSelectionRef = useRef<string | null>(null)
+  const submitAnswerRef = useRef<(answer: string) => void>(() => {})
   const [feedback, setFeedback] = useState<{
     answer: string
     status: 'correct' | 'incorrect'
@@ -151,8 +201,13 @@ export function LocationQuiz<T extends QuizItem>({
 
   useEffect(() => {
     const nextItem = queue[1]?.item
-    if (!nextItem || !preloadNext) return
-    const preloadTimer = window.setTimeout(() => preloadNext(nextItem), 80)
+    if (!nextItem || !preloadNext || document.hidden) return
+    const idleCallback = () => preloadNext(nextItem)
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleHandle = window.requestIdleCallback(idleCallback, { timeout: 2000 })
+      return () => window.cancelIdleCallback(idleHandle)
+    }
+    const preloadTimer = window.setTimeout(idleCallback, 80)
     return () => window.clearTimeout(preloadTimer)
   }, [question?.instanceId, queue[1]?.item.id])
 
@@ -179,7 +234,6 @@ export function LocationQuiz<T extends QuizItem>({
       const nextCompleted = completed + 1
       setCompleted(nextCompleted)
       setQueue(remaining)
-      setTypedAnswer('')
       if (remaining.length === 0 && nextCompleted >= 10) {
         setRoundComplete(true)
         setMessage('Round complete')
@@ -191,7 +245,6 @@ export function LocationQuiz<T extends QuizItem>({
 
     if (queue.length > 1) {
       setQueue([...queue.slice(1), question])
-      setTypedAnswer('')
       setMessage("We'll come back to that one.")
     }
   }
@@ -199,11 +252,13 @@ export function LocationQuiz<T extends QuizItem>({
   const submitAnswer = (answer: string) => {
     if (!question || isTransitioning) return
     setKeyboardSelection(null)
+    keyboardSelectionRef.current = null
     if (isAcceptedAnswer(question.item, answer, curriculum)) {
       const responseMs = Math.max(1, performance.now() - answerStartedAtRef.current)
       const speed = speedReward(question.item, responseMs, typedMode, questionAttempts)
       const baseXp = Math.max(5, (typedMode ? 25 : 20) - questionAttempts * 5)
       const earned = baseXp + speed.bonus
+      const fastAnswer = speed.bonus >= 5
       setIsTransitioning(true)
       setFeedback({ answer, status: 'correct' })
       if (speed.shakeScreen) {
@@ -281,7 +336,7 @@ export function LocationQuiz<T extends QuizItem>({
           setIsTransitioning(false)
           setFeedback(null)
         })
-      }, 850)
+      }, fastAnswer ? 450 : 850)
       window.setTimeout(() => setXpBurst(null), 1800)
       return
     }
@@ -312,24 +367,30 @@ export function LocationQuiz<T extends QuizItem>({
   }
 
   useEffect(() => {
+    submitAnswerRef.current = submitAnswer
+  })
+
+  useEffect(() => {
     if (typedMode || isTransitioning || roundComplete) return
 
     const handleKeyboardAnswer = (event: KeyboardEvent) => {
       const keyIndex = ['a', 's', 'd', 'f'].indexOf(event.key.toLowerCase())
       if (keyIndex !== -1 && options[keyIndex]) {
         event.preventDefault()
-        setKeyboardSelection(options[keyIndex].name)
+        const selection = options[keyIndex].name
+        setKeyboardSelection(selection)
+        keyboardSelectionRef.current = selection
         return
       }
-      if (event.key === 'Enter' && keyboardSelection) {
+      if (event.key === 'Enter' && keyboardSelectionRef.current) {
         event.preventDefault()
-        submitAnswer(keyboardSelection)
+        submitAnswerRef.current(keyboardSelectionRef.current)
       }
     }
 
     window.addEventListener('keydown', handleKeyboardAnswer)
     return () => window.removeEventListener('keydown', handleKeyboardAnswer)
-  }, [typedMode, isTransitioning, roundComplete, keyboardSelection, options])
+  }, [typedMode, isTransitioning, roundComplete, options])
 
   const beginNextRound = () => {
     const mode = nextRoundMode(activeRoundMode, curriculum, multipleChoiceCompletions)
@@ -410,27 +471,15 @@ export function LocationQuiz<T extends QuizItem>({
         </div>
 
         {typedMode ? (
-          <form
-            class="typed-answer"
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (typedAnswer.trim()) submitAnswer(typedAnswer)
-            }}
-          >
-            <label for={copy.typedInputId}>{copy.typedLabel}</label>
-            <div>
-              <input
-                ref={typedInputRef}
-                id={copy.typedInputId}
-                value={typedAnswer}
-                onInput={(event) => setTypedAnswer(event.currentTarget.value)}
-                autocomplete="off"
-                disabled={isTransitioning}
-                class={feedback ? `answer-field--${feedback.status}` : ''}
-              />
-              <button type="submit" disabled={isTransitioning}>Verify</button>
-            </div>
-          </form>
+          <TypedAnswerForm
+            key={question.instanceId}
+            inputId={copy.typedInputId}
+            label={copy.typedLabel}
+            disabled={isTransitioning}
+            feedback={feedback}
+            inputRef={typedInputRef}
+            onSubmit={submitAnswer}
+          />
         ) : (
           <div class="answer-options-wrap">
             <div class="answer-options">
@@ -477,7 +526,7 @@ export function LocationQuiz<T extends QuizItem>({
               {xpBurst.praise}
             </strong>
           ) : null}
-          {Array.from({ length: xpBurst.count }, (_, index) => (
+          {Array.from({ length: Math.min(xpBurst.count, 60) }, (_, index) => (
             <span
               class="xp-orb"
               style={`--delay:${Math.min(index * 18, 720)}ms;--coin-size:${8 + ((index * 7) % 9)}px;--spread-x:${(((index * 47) % 21) - 10) * (xpBurst.count >= 48 ? 14 : 5)}px;--spread-y:${-12 - ((index * 31) % (xpBurst.count >= 48 ? 110 : 55))}px;--spin:${((index % 2 ? 1 : -1) * (180 + ((index * 83) % 720)))}deg;--start-x:${xpBurst.start.x}px;--start-y:${xpBurst.start.y}px;--end-x:${xpBurst.end.x}px;--end-y:${xpBurst.end.y}px;`}
