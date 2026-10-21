@@ -1,18 +1,74 @@
 import { useEffect, useState } from 'preact/hooks'
-import { lazy, Suspense } from 'preact/compat'
+import type { ComponentType } from 'preact'
 import './app.css'
 import { setServiceWorkerUpdateSafe } from './pwa'
 
-const CountriesQuiz = lazy(() =>
-  import('./games/countries/CountriesQuiz').then((module) => ({
-    default: module.CountriesQuiz,
-  })),
-)
-const CapitalsQuiz = lazy(() =>
-  import('./games/capitals/CapitalsQuiz').then((module) => ({
-    default: module.CapitalsQuiz,
-  })),
-)
+type QuizProps = {
+  xp: number
+  onEarnXp: (amount: number) => void
+  onUpdateSafePoint: (safe: boolean) => void
+}
+
+type QuizLoader = () => Promise<ComponentType<QuizProps>>
+
+const loadCountriesQuiz: QuizLoader = () =>
+  import('./games/countries/CountriesQuiz').then((module) => module.CountriesQuiz)
+const loadCapitalsQuiz: QuizLoader = () =>
+  import('./games/capitals/CapitalsQuiz').then((module) => module.CapitalsQuiz)
+
+// Both quiz chunks share large vendor chunks (three.js and the familiarity
+// dataset), so downloading them while the user reads the homepage — or as
+// soon as they hover/focus a ready card — removes the stall on game start.
+let quizChunksPrefetched = false
+
+function prefetchQuizChunks() {
+  if (quizChunksPrefetched) return
+  quizChunksPrefetched = true
+  void import('./games/countries/CountriesQuiz').catch(() => undefined)
+  void import('./games/capitals/CapitalsQuiz').catch(() => undefined)
+}
+
+function scheduleIdlePrefetch() {
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(prefetchQuizChunks, { timeout: 4000 })
+  } else {
+    window.setTimeout(prefetchQuizChunks, 300)
+  }
+}
+
+function scheduleIntentPrefetch() {
+  window.setTimeout(prefetchQuizChunks, 150)
+}
+
+function useQuizComponent(load: QuizLoader, active: boolean) {
+  const [result, setResult] = useState<{
+    load: QuizLoader | null
+    component: ComponentType<QuizProps> | null
+    error: unknown
+  }>({ load: null, component: null, error: null })
+
+  useEffect(() => {
+    if (!active) return
+    let cancelled = false
+    load().then(
+      (component) => {
+        if (!cancelled) setResult({ load, component, error: null })
+      },
+      (error: unknown) => {
+        if (!cancelled) setResult({ load, component: null, error })
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [load, active])
+
+  // Ignore results that belong to a previous route's loader so a route
+  // switch always falls back to the loading markup instead of flashing a
+  // stale quiz for a frame.
+  const current = result.load === load ? result : null
+  return { Quiz: current?.component ?? null, loadError: current?.error ?? null }
+}
 
 type Game = {
   title: string
@@ -197,6 +253,10 @@ function LevelBadge({ xp }: { xp: number }) {
 }
 
 function Home({ setPath }: { setPath: (path: string) => void }) {
+  useEffect(() => {
+    scheduleIdlePrefetch()
+  }, [])
+
   return (
     <main>
       <section class="intro" aria-labelledby="page-title">
@@ -231,6 +291,8 @@ function Home({ setPath }: { setPath: (path: string) => void }) {
               class={`game-card game-card--${game.artwork} ${game.status === 'ready' ? 'game-card--ready' : ''}`}
               href={game.path}
               onClick={(event) => navigate(event, game.path, setPath)}
+              onMouseEnter={game.status === 'ready' ? scheduleIntentPrefetch : undefined}
+              onFocus={game.status === 'ready' ? scheduleIntentPrefetch : undefined}
               aria-label={`${game.title}. ${game.eyebrow}.`}
               key={game.path}
             >
@@ -335,7 +397,8 @@ export function App() {
   }
 
   const quizPath = path === '/countries-quiz' || path === '/capitals-quiz'
-  const Quiz = path === '/capitals-quiz' ? CapitalsQuiz : CountriesQuiz
+  const loadQuiz = path === '/capitals-quiz' ? loadCapitalsQuiz : loadCountriesQuiz
+  const { Quiz, loadError } = useQuizComponent(loadQuiz, quizPath)
 
   return (
     <div class="site-shell">
@@ -348,18 +411,24 @@ export function App() {
           <a class="back-link" href="/" onClick={(event) => navigate(event, '/', setPath)}>
             <span aria-hidden="true">←</span> All minigames
           </a>
-          <Suspense fallback={
-            <div class="game-loading" role="status">
-              <BrandMark />
-              <p>{path === '/capitals-quiz' ? 'Plotting the capitals…' : 'Preparing the globe…'}</p>
-            </div>
-          }>
+          {Quiz ? (
             <Quiz
               xp={xp}
               onEarnXp={earnXp}
               onUpdateSafePoint={setServiceWorkerUpdateSafe}
             />
-          </Suspense>
+          ) : (
+            <div class="game-loading" role="status">
+              <BrandMark />
+              <p>
+                {loadError
+                  ? 'The registry hit a snag. Reload to try again.'
+                  : path === '/capitals-quiz'
+                    ? 'Plotting the capitals…'
+                    : 'Preparing the globe…'}
+              </p>
+            </div>
+          )}
         </main>
       ) : game ? (
         <GamePage game={game} setPath={setPath} />
