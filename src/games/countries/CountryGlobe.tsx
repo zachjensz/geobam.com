@@ -5,6 +5,7 @@ import {
   DoubleSide,
   Group,
   LinearFilter,
+  LinearMipmapLinearFilter,
   MathUtils,
   Mesh,
   MeshBasicMaterial,
@@ -54,12 +55,36 @@ type CountryGlobeProps = {
 }
 
 const GLOBE_RADIUS = 2
-const MAP_WIDTH = 4096
-const MAP_HEIGHT = 2048
+const MAP_WIDTH = 2048
+const MAP_HEIGHT = 1024
 const MAX_RENDER_PIXELS = 1_500_000
 const mapCanvasCache = new Map<string, HTMLCanvasElement>()
 let worldMapCache: FeatureCollection | null = null
 let baseMapCanvasCache: HTMLCanvasElement | null = null
+
+// Tiny LRU of rasterized highlight canvases. Atlas rasterization is the
+// expensive step; wrong answers tend to re-queue the same country later in a
+// round, so a cache hit avoids re-rendering the full atlas.
+const MAP_CANVAS_CACHE_LIMIT = 3
+const insetMapCache = new Map<string, string>()
+let sharedBaseMapTexture: CanvasTexture | null = null
+
+function cacheMapCanvas(key: string, canvas: HTMLCanvasElement) {
+  mapCanvasCache.delete(key) // re-insert to refresh recency
+  mapCanvasCache.set(key, canvas)
+  if (mapCanvasCache.size > MAP_CANVAS_CACHE_LIMIT) {
+    const oldestKey = mapCanvasCache.keys().next().value
+    if (oldestKey !== undefined) mapCanvasCache.delete(oldestKey)
+  }
+}
+
+function readMapCanvas(key: string) {
+  const canvas = mapCanvasCache.get(key)
+  if (!canvas) return null
+  mapCanvasCache.delete(key) // refresh recency
+  mapCanvasCache.set(key, canvas)
+  return canvas
+}
 
 function getWorldMap() {
   if (worldMapCache) return worldMapCache
@@ -157,13 +182,18 @@ function drawFeature(
       context.save()
       tracePolygon(context, polygon, offset)
       context.fillStyle = fill
-      if (glow) {
-        context.shadowColor = 'rgba(109, 151, 101, 0.72)'
-        context.shadowBlur = 18
-      }
       context.fill('evenodd')
+      if (glow) {
+        // Cheap two-pass glow: a wide, low-alpha stroke under the dark
+        // outline. shadowBlur rasterization on the atlas canvas is
+        // disproportionately expensive; this looks near-identical.
+        context.strokeStyle = 'rgba(109, 151, 101, 0.4)'
+        context.lineWidth = 8
+        context.lineJoin = 'round'
+        context.stroke()
+      }
       context.strokeStyle = '#17201d'
-      context.lineWidth = 1.45
+      context.lineWidth = 0.725
       context.lineJoin = 'round'
       context.stroke()
       context.restore()
@@ -219,8 +249,8 @@ function drawIslandEnvelope(context: CanvasRenderingContext2D, mapFeature: MapFe
 
   context.save()
   context.strokeStyle = '#315d43'
-  context.lineWidth = 3.2
-  context.setLineDash([9, 8])
+  context.lineWidth = 1.6
+  context.setLineDash([4.5, 4])
   ;[-MAP_WIDTH, 0, MAP_WIDTH].forEach((offset) => {
     context.beginPath()
     context.ellipse(centerX + offset, centerY, radiusX, radiusY, 0, 0, Math.PI * 2)
@@ -304,7 +334,7 @@ function getBaseMapCanvas(map: FeatureCollection) {
 
   // A restrained atlas-style ocean graticule.
   context.strokeStyle = 'rgba(226, 234, 228, 0.15)'
-  context.lineWidth = 1
+  context.lineWidth = 0.5
   for (let longitude = -180; longitude <= 180; longitude += 15) {
     const x = ((longitude + 180) / 360) * MAP_WIDTH + 0.5
     context.beginPath()
@@ -365,13 +395,29 @@ function createMapTexture(
   isIslandNation: boolean,
   highlightCountry: boolean,
 ) {
-  const cacheKey = `${targetId}-${isIslandNation ? 'island' : 'land'}-${highlightCountry ? 'hl' : 'base'}`
-  const canvas = mapCanvasCache.get(cacheKey) ?? renderMapCanvas(map, targetId, isIslandNation, highlightCountry)
-  mapCanvasCache.delete(cacheKey)
+  if (!highlightCountry) {
+    // Base-map questions (capitals quiz) reuse one mipmapped texture built
+    // from the cached base atlas instead of uploading a fresh multi-MB image
+    // for every question. The sibling lifecycle PR skips disposing textures
+    // flagged with userData.isSharedBaseMap; this code never disposes it.
+    if (sharedBaseMapTexture) return sharedBaseMapTexture
+    const texture = new CanvasTexture(getBaseMapCanvas(map))
+    texture.colorSpace = SRGBColorSpace
+    texture.generateMipmaps = true
+    texture.minFilter = LinearMipmapLinearFilter
+    texture.magFilter = LinearFilter
+    texture.userData.isSharedBaseMap = true
+    sharedBaseMapTexture = texture
+    return texture
+  }
+
+  const cacheKey = `${targetId}-${isIslandNation ? 'island' : 'land'}-hl`
+  const canvas = readMapCanvas(cacheKey) ?? renderMapCanvas(map, targetId, isIslandNation, true)
+  cacheMapCanvas(cacheKey, canvas)
   const texture = new CanvasTexture(canvas)
   texture.colorSpace = SRGBColorSpace
-  // The atlas is already high resolution. Avoid allocating and generating a
-  // full mip chain for every question's temporary highlighted texture.
+  // Highlighted textures are transient. Avoid allocating and generating a
+  // mip chain for every question's temporary highlight.
   texture.generateMipmaps = false
   texture.minFilter = LinearFilter
   texture.magFilter = LinearFilter
@@ -409,12 +455,14 @@ export function preloadCountryMap(
   showIslandEnvelope: boolean,
   highlightCountry = true,
 ) {
-  const cacheKey = `${targetId}-${showIslandEnvelope ? 'island' : 'land'}-${highlightCountry ? 'hl' : 'base'}`
+  // The base map goes through the shared mipmapped texture, so there is no
+  // canvas to pre-rasterize for the highlight-free case.
+  if (!highlightCountry) return
+  const cacheKey = `${targetId}-${showIslandEnvelope ? 'island' : 'land'}-hl`
   if (mapCanvasCache.has(cacheKey)) return
-  mapCanvasCache.clear()
-  mapCanvasCache.set(
+  cacheMapCanvas(
     cacheKey,
-    renderMapCanvas(getWorldMap(), targetId, showIslandEnvelope, highlightCountry),
+    renderMapCanvas(getWorldMap(), targetId, showIslandEnvelope, true),
   )
 }
 
@@ -435,12 +483,16 @@ export function CountryGlobe({
   const controlsRef = useRef<OrbitControls | null>(null)
   const insetMap = useMemo(() => {
     if (!showSmallCountryMarker) return ''
+    const cached = insetMapCache.get(countryId)
+    if (cached !== undefined) return cached
     const selectedFeature = detailedCountryFeatures.find(
       (mapFeature) => mapFeature.id === countryId,
     ) ?? getWorldMap().features.find(
       (mapFeature) => String(mapFeature.id).padStart(3, '0') === countryId,
     )
-    return selectedFeature ? createInsetMap(selectedFeature) : ''
+    const dataUrl = selectedFeature ? createInsetMap(selectedFeature) : ''
+    insetMapCache.set(countryId, dataUrl)
+    return dataUrl
   }, [countryId, showSmallCountryMarker])
 
   useEffect(() => {
