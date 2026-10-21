@@ -23,6 +23,36 @@ import { feature } from 'topojson-client'
 import world from 'world-atlas/countries-110m.json'
 import { detailedCountryFeatures, detailedCountryIds } from './detailedGeometry'
 
+// Shared marker resources: constant geometry/material parameters are created
+// once per page load and reused by every question's markers. They must never
+// be disposed, even when the globe scene is torn down.
+const contextMarkerGeometry = new CircleGeometry(0.004, 10)
+const targetMarkerGeometry = new CircleGeometry(0.01, 16)
+const contextMarkerMaterial = new MeshBasicMaterial({
+  color: 0x243330,
+  side: DoubleSide,
+})
+const targetMarkerMaterial = new MeshBasicMaterial({
+  color: 0xd0a34e,
+  side: DoubleSide,
+})
+const smallCountryMarkerGeometry = new RingGeometry(0.075, 0.105, 40)
+const smallCountryMarkerMaterial = new MeshBasicMaterial({
+  color: 0x78966f,
+  side: DoubleSide,
+  depthTest: false,
+})
+
+type GlobeSceneHandles = {
+  globe: Group
+  sphere: Mesh
+  markerGroup: Group
+  camera: PerspectiveCamera
+  controls: OrbitControls
+  createdTextures: Set<CanvasTexture>
+  requestRender: () => void
+}
+
 type Geometry =
   | { type: 'Polygon'; coordinates: number[][][] }
   | { type: 'MultiPolygon'; coordinates: number[][][][] }
@@ -426,23 +456,12 @@ function createMapTexture(
 }
 
 function addCapitalMarkers(globe: Group, markers: GlobeMarker[]) {
-  const contextGeometry = new CircleGeometry(0.004, 10)
-  const targetGeometry = new CircleGeometry(0.01, 16)
-  const contextMaterial = new MeshBasicMaterial({
-    color: 0x243330,
-    side: DoubleSide,
-  })
-  const targetMaterial = new MeshBasicMaterial({
-    color: 0xd0a34e,
-    side: DoubleSide,
-  })
-
   markers.forEach((marker) => {
     const point = toPoint(marker.position[0], marker.position[1], 1).normalize()
     const isTarget = marker.role === 'target'
     const dot = new Mesh(
-      isTarget ? targetGeometry : contextGeometry,
-      isTarget ? targetMaterial : contextMaterial,
+      isTarget ? targetMarkerGeometry : contextMarkerGeometry,
+      isTarget ? targetMarkerMaterial : contextMarkerMaterial,
     )
     dot.position.copy(point.clone().multiplyScalar(GLOBE_RADIUS + 0.012))
     dot.lookAt(point.clone().multiplyScalar(4))
@@ -481,6 +500,11 @@ export function CountryGlobe({
 }: CountryGlobeProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
+  const sceneHandlesRef = useRef<GlobeSceneHandles | null>(null)
+  const targetCenterRef = useRef(new Vector3())
+  const boundsRef = useRef({ left: 0, top: 0, width: 0, height: 0 })
+  const onTargetPositionRef = useRef(onTargetPosition)
+  onTargetPositionRef.current = onTargetPosition
   const insetMap = useMemo(() => {
     if (!showSmallCountryMarker) return ''
     const cached = insetMapCache.get(countryId)
@@ -495,6 +519,11 @@ export function CountryGlobe({
     return dataUrl
   }, [countryId, showSmallCountryMarker])
 
+  const targetMarkerId = useMemo(
+    () => markers.find((marker) => marker.role === 'target')?.id,
+    [markers],
+  )
+
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
@@ -503,53 +532,25 @@ export function CountryGlobe({
     const camera = new PerspectiveCamera(38, 1, 0.1, 100)
     camera.position.set(0, 0, cameraDistance)
 
+    // MSAA only pays off at 1x device pixel ratio; higher ratios already
+    // supersample, so skip the extra memory and fill cost there.
     const renderer = new WebGLRenderer({
-      antialias: true,
+      antialias: Math.min(window.devicePixelRatio, 1.5) < 1.5,
       alpha: true,
       powerPreference: 'low-power',
     })
     renderer.outputColorSpace = SRGBColorSpace
     host.appendChild(renderer.domElement)
 
-    const map = getWorldMap()
-    const mapTexture = createMapTexture(map, countryId, showIslandEnvelope, highlightCountry)
-
     const globe = new Group()
     const sphere = new Mesh(
       new SphereGeometry(GLOBE_RADIUS, 96, 64),
-      new MeshBasicMaterial({ map: mapTexture }),
+      new MeshBasicMaterial(),
     )
+    const markerGroup = new Group()
     globe.add(sphere)
+    globe.add(markerGroup)
     scene.add(globe)
-
-    const center = toPoint(focus[0], focus[1], 1).normalize()
-    if (markers.length) addCapitalMarkers(globe, markers)
-    if (showSmallCountryMarker && !isIslandNation) {
-      const marker = new Mesh(
-        new RingGeometry(0.075, 0.105, 40),
-        new MeshBasicMaterial({
-          color: 0x78966f,
-          side: DoubleSide,
-          depthTest: false,
-        }),
-      )
-      marker.position.copy(center.clone().multiplyScalar(GLOBE_RADIUS + 0.008))
-      marker.lookAt(center.clone().multiplyScalar(4))
-      globe.add(marker)
-    }
-
-    const yaw = Math.atan2(-center.x, center.z)
-    const yawRotation = new Quaternion().setFromAxisAngle(
-      new Vector3(0, 1, 0),
-      yaw,
-    )
-    const yawedCenter = center.clone().applyQuaternion(yawRotation)
-    const pitch = Math.atan2(yawedCenter.y, yawedCenter.z)
-    const pitchRotation = new Quaternion().setFromAxisAngle(
-      new Vector3(1, 0, 0),
-      pitch,
-    )
-    globe.quaternion.copy(pitchRotation.multiply(yawRotation))
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
@@ -563,9 +564,17 @@ export function CountryGlobe({
     controls.zoomToCursor = false
     controlsRef.current = controls
 
+    // Only textures created by the per-question effect land in this set;
+    // unmount cleanup disposes exactly those. Textures flagged with
+    // userData.isSharedBaseMap are additionally never disposed.
+    const createdTextures = new Set<CanvasTexture>()
+
     let frame = 0
+    let resizeFrame: number | null = null
     let renderRequested = false
     let disposed = false
+    let lastAppliedWidth = 0
+    let lastAppliedHeight = 0
     const projectedTarget = new Vector3()
 
     const render = () => {
@@ -575,18 +584,23 @@ export function CountryGlobe({
 
       // With damping enabled, update emits another change only while the
       // camera is still moving, extending this short render burst as needed.
-      controls.update()
-      if (onTargetPosition) {
-        projectedTarget
-          .copy(center)
-          .multiplyScalar(GLOBE_RADIUS + 0.008)
-          .applyQuaternion(globe.quaternion)
-          .project(camera)
-        const bounds = renderer.domElement.getBoundingClientRect()
-        onTargetPosition({
-          x: bounds.left + (projectedTarget.x * 0.5 + 0.5) * bounds.width,
-          y: bounds.top + (-projectedTarget.y * 0.5 + 0.5) * bounds.height,
-        })
+      const stillDamping = controls.update()
+      if (!stillDamping) {
+        // The loop is about to idle, so this is the moment to report the
+        // target's screen position (the consumer reads it at answer time).
+        const report = onTargetPositionRef.current
+        if (report) {
+          projectedTarget
+            .copy(targetCenterRef.current)
+            .multiplyScalar(GLOBE_RADIUS + 0.008)
+            .applyQuaternion(globe.quaternion)
+            .project(camera)
+          const bounds = boundsRef.current
+          report({
+            x: bounds.left + (projectedTarget.x * 0.5 + 0.5) * bounds.width,
+            y: bounds.top + (-projectedTarget.y * 0.5 + 0.5) * bounds.height,
+          })
+        }
       }
       renderer.render(scene, camera)
     }
@@ -598,9 +612,20 @@ export function CountryGlobe({
       }
     }
 
-    const resize = () => {
+    // The canvas rect is cached in boundsRef; layout is only re-read on
+    // resize and scroll, never once per damped frame.
+    const updateBounds = () => {
+      boundsRef.current = renderer.domElement.getBoundingClientRect()
+    }
+
+    const applyResize = () => {
+      resizeFrame = null
+      if (disposed) return
       const width = host.clientWidth
       const height = host.clientHeight
+      if (width === lastAppliedWidth && height === lastAppliedHeight) return
+      lastAppliedWidth = width
+      lastAppliedHeight = height
       const deviceScale = Math.min(window.devicePixelRatio, 1.5)
       const pixelScale = Math.min(
         deviceScale,
@@ -610,41 +635,134 @@ export function CountryGlobe({
       renderer.setSize(width, height, false)
       camera.aspect = width / Math.max(height, 1)
       camera.updateProjectionMatrix()
+      updateBounds()
       requestRender()
     }
+
+    // Coalesce resize work: at most one setSize/setPixelRatio per frame.
+    const resize = () => {
+      if (resizeFrame !== null || disposed) return
+      resizeFrame = requestAnimationFrame(applyResize)
+    }
+
+    const onScroll = () => {
+      updateBounds()
+      requestRender()
+    }
+
     const observer = new ResizeObserver(resize)
     observer.observe(host)
+    window.addEventListener('scroll', onScroll, { passive: true })
     controls.addEventListener('change', requestRender)
     resize()
+
+    sceneHandlesRef.current = {
+      globe,
+      sphere,
+      markerGroup,
+      camera,
+      controls,
+      createdTextures,
+      requestRender,
+    }
 
     return () => {
       disposed = true
       if (frame) cancelAnimationFrame(frame)
+      if (resizeFrame !== null) cancelAnimationFrame(resizeFrame)
       observer.disconnect()
+      window.removeEventListener('scroll', onScroll)
       controls.removeEventListener('change', requestRender)
       controls.dispose()
       controlsRef.current = null
-      scene.traverse((object) => {
-        if (object instanceof Mesh) {
-          object.geometry.dispose()
-          const materials = Array.isArray(object.material) ? object.material : [object.material]
-          materials.forEach((material) => material.dispose())
-        }
+      sphere.geometry.dispose()
+      const sphereMaterial = sphere.material as MeshBasicMaterial
+      createdTextures.forEach((texture) => {
+        if (!texture.userData.isSharedBaseMap) texture.dispose()
       })
-      mapTexture.dispose()
+      createdTextures.clear()
+      sphereMaterial.dispose()
+      sceneHandlesRef.current = null
       renderer.dispose()
+      // dispose() alone leaves the GL context alive until GC; browsers cap
+      // the number of live contexts, so release it explicitly.
+      renderer.forceContextLoss()
       renderer.domElement.remove()
     }
+  }, [])
+
+  useEffect(() => {
+    const handles = sceneHandlesRef.current
+    if (!handles) return
+
+    const mapTexture = createMapTexture(
+      getWorldMap(),
+      countryId,
+      showIslandEnvelope,
+      highlightCountry,
+    )
+
+    const material = handles.sphere.material as MeshBasicMaterial
+    const previousTexture = material.map
+    if (
+      previousTexture
+      && previousTexture !== mapTexture
+      && handles.createdTextures.has(previousTexture as CanvasTexture)
+      && !previousTexture.userData.isSharedBaseMap
+    ) {
+      previousTexture.dispose()
+    }
+    if (previousTexture) {
+      handles.createdTextures.delete(previousTexture as CanvasTexture)
+    }
+    material.map = mapTexture
+    material.needsUpdate = true
+    handles.createdTextures.add(mapTexture)
+
+    const center = toPoint(focus[0], focus[1], 1).normalize()
+
+    // Rebuild this question's markers on top of the persistent sphere. The
+    // marker meshes share module-scope geometry/material, so clearing the
+    // group is all the teardown they need.
+    handles.markerGroup.clear()
+    if (markers.length) addCapitalMarkers(handles.markerGroup, markers)
+    if (showSmallCountryMarker && !isIslandNation) {
+      const marker = new Mesh(smallCountryMarkerGeometry, smallCountryMarkerMaterial)
+      marker.position.copy(center.clone().multiplyScalar(GLOBE_RADIUS + 0.008))
+      marker.lookAt(center.clone().multiplyScalar(4))
+      handles.markerGroup.add(marker)
+    }
+
+    const yaw = Math.atan2(-center.x, center.z)
+    const yawRotation = new Quaternion().setFromAxisAngle(
+      new Vector3(0, 1, 0),
+      yaw,
+    )
+    const yawedCenter = center.clone().applyQuaternion(yawRotation)
+    const pitch = Math.atan2(yawedCenter.y, yawedCenter.z)
+    const pitchRotation = new Quaternion().setFromAxisAngle(
+      new Vector3(1, 0, 0),
+      pitch,
+    )
+    handles.globe.quaternion.copy(pitchRotation.multiply(yawRotation))
+
+    // Snap the camera back to this question's viewing distance and sync the
+    // controls' saved state so a resetSignal reset() lands on the same spot.
+    handles.camera.position.set(0, 0, cameraDistance)
+    handles.controls.position0.copy(handles.camera.position)
+    handles.controls.reset()
+
+    targetCenterRef.current.copy(center)
+    handles.requestRender()
   }, [
     countryId,
-    countryName,
     focus,
     showSmallCountryMarker,
     isIslandNation,
     showIslandEnvelope,
     highlightCountry,
     cameraDistance,
-    markers.find((marker) => marker.role === 'target')?.id,
+    targetMarkerId,
     markers.length,
   ])
 
