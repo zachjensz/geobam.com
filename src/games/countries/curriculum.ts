@@ -1,5 +1,6 @@
 import { worldCountries } from '../../data/countriesSlim'
 import { familiarOrder } from '../../domain/familiarity'
+import { precomputeNormalizedNames } from '../../domain/answers'
 import { shuffle } from '../../domain/rounds'
 
 export type Country = {
@@ -42,8 +43,14 @@ const clueOverrides: Record<string, string> = {
   'Sweden': 'This Scandinavian country lies between Norway and the Baltic Sea.',
 }
 
+// Familiar countries are probed on every sort comparison, so a Map replaces
+// repeated O(66) indexOf scans with a single O(1) lookup.
+const familiarIndex = new Map<string, number>()
+familiarOrder.forEach((name, index) => familiarIndex.set(name, index))
+
 function rarityFor(country: (typeof worldCountries)[number]): 1 | 2 | 3 | 4 | 5 {
-  if (familiarOrder.includes(country.name.common)) return familiarOrder.indexOf(country.name.common) < 22 ? 1 : 2
+  const familiarRank = familiarIndex.get(country.name.common)
+  if (familiarRank !== undefined) return familiarRank < 22 ? 1 : 2
   if (country.region === 'Europe') return 3
   if (country.subregion.includes('Caribbean') || country.subregion.includes('Polynesia') || country.subregion.includes('Micronesia') || country.subregion.includes('Melanesia')) return 5
   if (country.area < 5_000) return 5
@@ -54,18 +61,21 @@ function rarityFor(country: (typeof worldCountries)[number]): 1 | 2 | 3 | 4 | 5 
 
 const orderedCountries = worldCountries
   .filter((country) => country.unMember)
+  // Memoize rarity once per country instead of re-scanning the familiarity
+  // and region lists on every sort comparison.
+  .map((country) => ({ country, rarity: rarityFor(country) }))
   .sort((first, second) => {
-    const firstKnown = familiarOrder.indexOf(first.name.common)
-    const secondKnown = familiarOrder.indexOf(second.name.common)
-    if (firstKnown !== -1 || secondKnown !== -1) {
-      if (firstKnown === -1) return 1
-      if (secondKnown === -1) return -1
+    const firstKnown = familiarIndex.get(first.country.name.common)
+    const secondKnown = familiarIndex.get(second.country.name.common)
+    if (firstKnown !== undefined || secondKnown !== undefined) {
+      if (firstKnown === undefined) return 1
+      if (secondKnown === undefined) return -1
       return firstKnown - secondKnown
     }
-    return rarityFor(first) - rarityFor(second) || second.area - first.area
+    return first.rarity - second.rarity || second.country.area - first.country.area
   })
 
-export const countryCurriculum: Country[] = orderedCountries.map((country, index) => {
+export const countryCurriculum: Country[] = orderedCountries.map(({ country, rarity }, index) => {
   const name = country.name.common
   const aliases = [
     country.name.official,
@@ -90,12 +100,12 @@ export const countryCurriculum: Country[] = orderedCountries.map((country, index
       'Dominican Republic',
     ].includes(name)
 
-  return {
+  const item: Country = {
     id: country.ccn3,
     name,
     aliases,
     level: index < 10 ? 1 : Math.ceil((index - 9) / 4) + 1,
-    rarity: rarityFor(country),
+    rarity,
     averageTypingMs: Math.min(6_500, 850 + letters * 165 + (name.split(' ').length - 1) * 180),
     clue: clueOverrides[name] ?? `It is in ${country.subregion || country.region}.`,
     focus,
@@ -105,10 +115,33 @@ export const countryCurriculum: Country[] = orderedCountries.map((country, index
     // immediately legible islands such as Australia do not need one.
     showIslandEnvelope: isIslandNation && country.area < 150_000,
   }
+  // Normalize the name and aliases once at module load so typed submissions
+  // never re-normalize the whole catalogue per keystroke.
+  precomputeNormalizedNames(item)
+  return item
 })
 
+// Cumulative per-level buckets computed once at module load: levels only ever
+// increase along the curriculum, so concatenating level buckets in order
+// reproduces the old per-question filter.
+const countriesByLevel: Country[][] = []
+for (const country of countryCurriculum) {
+  const bucket = countriesByLevel[country.level] ?? (countriesByLevel[country.level] = [])
+  bucket.push(country)
+}
+
+const countriesUpToLevel: Country[][] = []
+{
+  let running: Country[] = []
+  for (let level = 1; level < countriesByLevel.length; level += 1) {
+    running = [...running, ...(countriesByLevel[level] ?? [])]
+    countriesUpToLevel[level] = running
+  }
+}
+
 export function countriesForLevel(level: number) {
-  return countryCurriculum.filter((country) => country.level <= Math.max(1, level))
+  const clamped = Math.min(Math.max(1, Math.floor(level)), countriesUpToLevel.length - 1)
+  return countriesUpToLevel[clamped] ?? []
 }
 
 export function countryOptions(question: Country, level: number) {

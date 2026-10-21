@@ -14,23 +14,40 @@ export function normalizeAnswer(answer: string) {
     .toLowerCase()
 }
 
-export function editDistance(first: string, second: string) {
-  const previous = Array.from({ length: second.length + 1 }, (_, index) => index)
+// Two row buffers reused across every editDistance call. The DP recurrence
+// only needs the previous row, so allocating one row pair at module level
+// (grown on demand) avoids allocating fresh arrays for every candidate on
+// every typed submit.
+let previousRow: number[] = []
+let currentRow: number[] = []
 
-  for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
-    const current = [firstIndex]
-    for (let secondIndex = 1; secondIndex <= second.length; secondIndex += 1) {
-      const substitutionCost = first[firstIndex - 1] === second[secondIndex - 1] ? 0 : 1
-      current[secondIndex] = Math.min(
-        current[secondIndex - 1] + 1,
-        previous[secondIndex] + 1,
-        previous[secondIndex - 1] + substitutionCost,
-      )
-    }
-    previous.splice(0, previous.length, ...current)
+export function editDistance(first: string, second: string) {
+  const secondLength = second.length
+  if (previousRow.length <= secondLength) {
+    previousRow = new Array(secondLength + 1)
+    currentRow = new Array(secondLength + 1)
+  }
+  for (let index = 0; index <= secondLength; index += 1) {
+    previousRow[index] = index
   }
 
-  return previous[second.length]
+  for (let firstIndex = 1; firstIndex <= first.length; firstIndex += 1) {
+    currentRow[0] = firstIndex
+    const firstCharacter = first[firstIndex - 1]
+    for (let secondIndex = 1; secondIndex <= secondLength; secondIndex += 1) {
+      const substitutionCost = firstCharacter === second[secondIndex - 1] ? 0 : 1
+      currentRow[secondIndex] = Math.min(
+        currentRow[secondIndex - 1] + 1,
+        previousRow[secondIndex] + 1,
+        previousRow[secondIndex - 1] + substitutionCost,
+      )
+    }
+    const swap = previousRow
+    previousRow = currentRow
+    currentRow = swap
+  }
+
+  return previousRow[secondLength]
 }
 
 function allowedDistance(length: number) {
@@ -39,19 +56,64 @@ function allowedDistance(length: number) {
   return 0
 }
 
-export function matchDistance(item: NamedItem, answer: string) {
-  const normalized = normalizeAnswer(answer)
+// Curriculum items register their normalized answer forms once at module load
+// (see precomputeNormalizedNames) so typed submissions stop re-running NFD
+// normalization plus regexes over ~195 items × ~15 aliases per keystroke.
+const normalizedCandidates = new WeakMap<NamedItem, {
+  name: string
+  aliases: string[]
+}>()
+
+export function precomputeNormalizedNames(item: NamedItem) {
+  if (normalizedCandidates.has(item)) return
+  normalizedCandidates.set(item, {
+    name: normalizeAnswer(item.name),
+    aliases: item.aliases.map(normalizeAnswer),
+  })
+}
+
+function normalizedNameOf(item: NamedItem) {
+  return normalizedCandidates.get(item)?.name ?? normalizeAnswer(item.name)
+}
+
+function matchDistanceNormalized(item: NamedItem, normalized: string) {
   if (!normalized) return null
 
+  const cached = normalizedCandidates.get(item)
   let best: number | null = null
-  for (const candidate of [item.name, ...item.aliases]) {
-    const expected = normalizeAnswer(candidate)
-    if (!expected) continue
+
+  const consider = (expected: string) => {
+    if (!expected) return
+    const allowed = allowedDistance(Math.max(expected.length, normalized.length))
+    // The edit distance is at least the length difference, so candidates
+    // that differ in length by more than the allowed distance can never be
+    // accepted. Skipping them avoids running the DP recurrence entirely.
+    if (Math.abs(expected.length - normalized.length) > allowed) return
     const distance = expected === normalized ? 0 : editDistance(expected, normalized)
-    if (distance > allowedDistance(Math.max(expected.length, normalized.length))) continue
+    if (distance > allowed) return
     if (best === null || distance < best) best = distance
   }
+
+  if (cached) {
+    consider(cached.name)
+    if (best === 0) return 0
+    for (const alias of cached.aliases) {
+      consider(alias)
+      if (best === 0) return 0
+    }
+  } else {
+    consider(normalizeAnswer(item.name))
+    if (best === 0) return 0
+    for (const alias of item.aliases) {
+      consider(normalizeAnswer(alias))
+      if (best === 0) return 0
+    }
+  }
   return best
+}
+
+export function matchDistance(item: NamedItem, answer: string) {
+  return matchDistanceNormalized(item, normalizeAnswer(answer))
 }
 
 export function isAcceptedAnswer(
@@ -59,15 +121,15 @@ export function isAcceptedAnswer(
   answer: string,
   catalogue: NamedItem[] = [],
 ) {
-  const score = matchDistance(item, answer)
+  const normalized = normalizeAnswer(answer)
+  const score = matchDistanceNormalized(item, normalized)
   if (score === null) return false
 
-  const normalized = normalizeAnswer(answer)
-  if (normalizeAnswer(item.name) === normalized) return true
+  if (normalizedNameOf(item) === normalized) return true
 
   const conflicting = catalogue.some((other) => {
     if (other.id === item.id) return false
-    const otherScore = matchDistance(other, answer)
+    const otherScore = matchDistanceNormalized(other, normalized)
     return otherScore !== null && otherScore <= score
   })
   return !conflicting
