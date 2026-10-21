@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run verify:deploy",
     "test": "vitest run",
     "data:slim": "node scripts/slim-countries.mjs",
     "preview": "vite preview",
+    "verify:deploy": "node scripts/verify-deploy-config.mjs",
     "deploy:clean": "node scripts/clean-wrangler-redirect.mjs",
-    "deploy": "npm run build && npm run deploy:clean && wrangler deploy",
-    "deploy:check": "npm run build && npm run deploy:clean && wrangler deploy --dry-run"
+    "deploy": "npm run build && npm run deploy:clean && npm run verify:deploy && wrangler deploy",
+    "deploy:check": "npm run build && npm run deploy:clean && npm run verify:deploy && wrangler deploy --dry-run"
   },
   "dependencies": {
     "preact": "^11.0.1",

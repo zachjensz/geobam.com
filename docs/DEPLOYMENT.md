@@ -59,6 +59,37 @@ The root `wrangler.jsonc` is the only source of deployment configuration.
 `assets.directory` points Wrangler straight at the Vite build output, so
 there is no generated `dist/wrangler.json` to edit or regenerate.
 
+## Continuous integration
+
+Deployments are driven by **Cloudflare Workers Builds**, which is connected
+to this GitHub repository. Each push runs:
+
+1. the build command (`npm run build`), then
+2. the deploy command (`npx wrangler deploy`).
+
+The build image is Ubuntu 24.04 with Node.js 24 and npm 10 by default. Pin a
+different runtime by adding a `.nvmrc` or `.node-version` file. Wrangler
+requires Node.js 22 or newer.
+
+Build results are reported on the commit as a `Workers Builds: geobam` check
+run, and the full log is under **Workers & Pages → geobam → Settings →
+Builds** in the Cloudflare dashboard. The GitHub check run only contains a
+link to that log, so read the log there rather than looking for annotations
+on the commit.
+
+`npm run verify:deploy` checks the deployment configuration statically and
+runs as part of `npm run build`. It fails the build when:
+
+- `vite.config.ts` imports a module that is not listed in `package.json`
+  (this happened when `@cloudflare/vite-plugin` was removed from the
+  dependencies but the import was left behind, failing the build with
+  `TS2307: Cannot find module`),
+- `wrangler.jsonc` declares an `assets` block without `directory` (which
+  fails the deploy step with "The `assets` property in your configuration is
+  missing the required `directory` property"),
+- a stale `.wrangler/deploy/config.json` redirect points at a config that no
+  longer exists.
+
 ## Stale Wrangler deploy redirects
 
 Earlier revisions deployed through Cloudflare's official Vite plugin, which
