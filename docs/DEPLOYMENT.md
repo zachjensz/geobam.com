@@ -13,10 +13,9 @@ The fallback must:
 - Preserve the original browser URL so the Preact router can render the correct page.
 - Be tested using a direct request and hard refresh on `/countries-quiz` and `/capitals-quiz`.
 
-GeoBam targets Cloudflare Workers with Static Assets through Cloudflare's official
-Vite plugin. `wrangler.jsonc` sets `assets.not_found_handling` to
-`single-page-application`, which supplies this fallback without routing real
-files through application HTML.
+GeoBam targets Cloudflare Workers with Static Assets. `wrangler.jsonc` sets
+`assets.not_found_handling` to `single-page-application`, which supplies this
+fallback without routing real files through application HTML.
 
 ## PWA and service-worker delivery
 
@@ -52,10 +51,29 @@ npm run deploy
 ```
 
 `deploy:check` performs a build and Wrangler dry run without publishing.
-`deploy` builds and publishes the generated Worker configuration and static
-assets together. For CI, provide a scoped `CLOUDFLARE_API_TOKEN` and
+`deploy` builds and publishes the Worker configuration and static assets
+together. For CI, provide a scoped `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` secret rather than running interactive login.
 
-The official Cloudflare Vite adapter generates `dist/wrangler.json` for Wrangler.
-Do not edit that generated file; source deployment configuration belongs in the
-root `wrangler.jsonc`.
+The root `wrangler.jsonc` is the only source of deployment configuration.
+`assets.directory` points Wrangler straight at the Vite build output, so
+there is no generated `dist/wrangler.json` to edit or regenerate.
+
+## Stale Wrangler deploy redirects
+
+Earlier revisions deployed through Cloudflare's official Vite plugin, which
+wrote a `.wrangler/deploy/config.json` redirect pointing Wrangler at a
+generated `dist/wrangler.json`. That plugin has been removed, so the
+generated file no longer exists, but the redirect can survive in an existing
+working copy and makes every deploy fail with:
+
+```text
+ERROR  There is a deploy configuration at ".wrangler/deploy/config.json".
+But the redirected configuration path it points to, "dist/wrangler.json",
+does not exist.
+```
+
+`npm run deploy:clean` (also run automatically by `npm run deploy` and
+`npm run deploy:check`) removes that redirect when — and only when — the
+config it points at is missing, so a working redirect is left untouched. A
+fresh clone has no `.wrangler` directory and never hits this.

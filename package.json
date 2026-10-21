@@ -9,8 +9,9 @@
     "test": "vitest run",
     "data:slim": "node scripts/slim-countries.mjs",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler deploy",
-    "deploy:check": "npm run build && wrangler deploy --dry-run"
+    "deploy:clean": "node scripts/clean-wrangler-redirect.mjs",
+    "deploy": "npm run build && npm run deploy:clean && wrangler deploy",
+    "deploy:check": "npm run build && npm run deploy:clean && wrangler deploy --dry-run"
   },
   "dependencies": {
     "preact": "^11.0.1",

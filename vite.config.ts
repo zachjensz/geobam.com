@@ -101,7 +101,13 @@ export default defineConfig({
           {
             // Hashed, immutable JS assets (entry + lazy chunks) — serve from
             // cache first so quizzes work offline after their first online load.
-            urlPattern: /^\/assets\/.*\.js$/,
+            //
+            // Workbox's RegExpRoute matches this pattern against the *full
+            // request URL*, not the pathname, so the pattern must not be
+            // anchored with `^` — that would never match and the runtime
+            // cache would silently stay empty. An unanchored `/assets/...`
+            // pattern matches the path portion of any same-origin URL.
+            urlPattern: /\/assets\/.*\.js$/,
             handler: 'CacheFirst',
           },
         ],
