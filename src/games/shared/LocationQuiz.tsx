@@ -33,14 +33,43 @@ export type LocationQuizCopy = {
   typedInputId: string
 }
 
-export type OptionsContext = {
+export type QuestionChallenge = {
   /** True once the player is answering at least 90% of recent questions first time. */
   hard: boolean
+  /**
+   * Extra zoom for this question: 0 is the normal view, 1 a close-up and 2 a
+   * tight close-up. Only rolled during a long first-try streak.
+   */
+  closeUp: 0 | 1 | 2
 }
 
 /** Recent first-try accuracy that switches multiple choice to near-miss options. */
 export const HARD_OPTIONS_ACCURACY = 0.9
 const HARD_OPTIONS_MIN_RESULTS = 10
+
+/** First-try streak at which close-up zoom challenges start appearing. */
+export const CLOSE_UP_STREAK = 5
+const DEEP_CLOSE_UP_STREAK = 10
+
+export function firstTryStreak(results: RecentResult[]) {
+  let streak = 0
+  for (let index = results.length - 1; index >= 0 && results[index].firstTryCorrect; index -= 1) {
+    streak += 1
+  }
+  return streak
+}
+
+/**
+ * Occasionally zoom in during a hot streak. The chance grows with the streak
+ * (25% at 5 in a row, up to 60%) and from 10 in a row half of the close-ups
+ * are the tighter level.
+ */
+export function rollCloseUp(streak: number, random = Math.random): 0 | 1 | 2 {
+  if (streak < CLOSE_UP_STREAK) return 0
+  const chance = Math.min(0.6, 0.25 + (streak - CLOSE_UP_STREAK) * 0.05)
+  if (random() >= chance) return 0
+  return streak >= DEEP_CLOSE_UP_STREAK && random() < 0.5 ? 2 : 1
+}
 
 type LocationQuizProps<T extends QuizItem> = {
   xp: number
@@ -52,13 +81,16 @@ type LocationQuizProps<T extends QuizItem> = {
     performance: string
   }
   copy: LocationQuizCopy
-  optionsFor: (item: T, context: OptionsContext) => T[]
+  optionsFor: (item: T, challenge: QuestionChallenge) => T[]
   renderGlobe: (
     item: T,
     resetSignal: number,
     onTargetPosition: (position: { x: number; y: number }) => void,
+    challenge: QuestionChallenge,
   ) => ComponentChildren
   preloadNext?: (item: T) => void
+  /** Roll streak close-up zoom challenges (the globe must honour `closeUp`). */
+  closeUps?: boolean
 }
 
 type TransitionDocument = Document & {
@@ -129,6 +161,7 @@ export function LocationQuiz<T extends QuizItem>({
   optionsFor,
   renderGlobe,
   preloadNext,
+  closeUps = false,
 }: LocationQuizProps<T>) {
   const level = Math.floor(xp / 100) + 1
   const initialRecords = useMemo(() => {
@@ -184,13 +217,17 @@ export function LocationQuiz<T extends QuizItem>({
   const question = queue[0]
   const questionAttempts = question ? attempts[question.instanceId] ?? 0 : 0
   const typedMode = question?.mode === 'typed'
+  // Rolled once per question so re-renders never change the zoom or options.
+  const challenge = useMemo<QuestionChallenge>(
+    () => ({
+      hard: recentResults.length >= HARD_OPTIONS_MIN_RESULTS
+        && recentAccuracy(recentResults) >= HARD_OPTIONS_ACCURACY,
+      closeUp: closeUps ? rollCloseUp(firstTryStreak(recentResults)) : 0,
+    }),
+    [question?.instanceId],
+  )
   const options = useMemo(
-    () => question
-      ? optionsFor(question.item, {
-        hard: recentResults.length >= HARD_OPTIONS_MIN_RESULTS
-          && recentAccuracy(recentResults) >= HARD_OPTIONS_ACCURACY,
-      })
-      : [],
+    () => question ? optionsFor(question.item, challenge) : [],
     [question?.instanceId],
   )
 
@@ -488,7 +525,12 @@ export function LocationQuiz<T extends QuizItem>({
       <div class="globe-stage">
         {renderGlobe(question.item, resetSignal, (position) => {
           targetPositionRef.current = position
-        })}
+        }, challenge)}
+        {challenge.closeUp ? (
+          <span class="reset-globe close-up-badge" role="status">
+            <span aria-hidden="true">⌖</span> Streak close-up{challenge.closeUp === 2 ? ' ×2' : ''}
+          </span>
+        ) : null}
         <button class="reset-globe" type="button" onClick={() => setResetSignal((value) => value + 1)}>
           <span aria-hidden="true">◎</span> {copy.returnLabel}
         </button>

@@ -1,5 +1,5 @@
 import { LocationQuiz } from '../shared/LocationQuiz'
-import { countryCurriculum, countryOptions } from './curriculum'
+import { countryCameraDistance, countryCurriculum, countryOptions } from './curriculum'
 import { CountryGlobe, preloadCountryMap } from './CountryGlobe'
 
 type CountriesQuizProps = {
@@ -29,8 +29,9 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
         typedInputId: 'country-answer',
       }}
       optionsFor={(country, { hard }) => countryOptions(country, Math.max(2, country.level), hard)}
+      closeUps
       preloadNext={(country) => preloadCountryMap(country.id, country.showIslandEnvelope)}
-      renderGlobe={(country, resetSignal, onTargetPosition) => (
+      renderGlobe={(country, resetSignal, onTargetPosition, { closeUp }) => (
         <CountryGlobe
           countryId={country.id}
           countryName="the mystery country"
@@ -38,6 +39,8 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
           showSmallCountryMarker={country.showSmallCountryMarker}
           isIslandNation={country.isIslandNation}
           showIslandEnvelope={country.showIslandEnvelope}
+          cameraDistance={countryCameraDistance(country, closeUp)}
+          lockZoom={closeUp > 0}
           resetSignal={resetSignal}
           onTargetPosition={onTargetPosition}
         />

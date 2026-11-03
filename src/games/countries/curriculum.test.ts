@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { countryCurriculum, countryOptions, nearbyCountries } from './curriculum'
+import { worldCountries } from '../../data/countriesSlim'
+import { countryCameraDistance, countryCurriculum, countryOptions, nearbyCountries } from './curriculum'
 
 const byName = (name: string) => countryCurriculum.find((country) => country.name === name)!
 
@@ -38,5 +39,22 @@ describe('countryOptions', () => {
       expect(options.some((option) => option.id === serbia.id)).toBe(true)
       expect(new Set(options.map((option) => option.id)).size).toBe(4)
     }
+  })
+})
+
+describe('countryCameraDistance', () => {
+  it('zooms in for close-ups but limits it for huge countries', () => {
+    const serbia = byName('Serbia')
+    expect(countryCameraDistance(serbia, 2)).toBeLessThan(countryCameraDistance(serbia, 1))
+    expect(countryCameraDistance(serbia, 1)).toBeLessThan(countryCameraDistance(serbia, 0))
+    expect(countryCameraDistance(byName('Russia'), 2)).toBe(countryCameraDistance(byName('Russia'), 0))
+  })
+})
+
+describe('curriculum balance', () => {
+  it('keeps Europe to roughly its share of the first hundred countries', () => {
+    const european = new Set(worldCountries.filter((country) => country.region === 'Europe').map((country) => country.ccn3))
+    const first100 = countryCurriculum.slice(0, 100).filter((country) => european.has(country.id))
+    expect(first100.length).toBeLessThanOrEqual(25)
   })
 })

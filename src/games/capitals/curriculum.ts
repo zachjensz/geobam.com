@@ -74,14 +74,13 @@ const clueOverrides: Record<string, string> = {
 }
 
 // Familiar countries are probed on every sort comparison, so a Map replaces
-// repeated O(66) indexOf scans with a single O(1) lookup.
+// repeated indexOf scans with a single O(1) lookup.
 const familiarIndex = new Map<string, number>()
 familiarOrder.forEach((name, index) => familiarIndex.set(name, index))
 
 function rarityFor(country: (typeof worldCountries)[number]): 1 | 2 | 3 | 4 | 5 {
   const familiarRank = familiarIndex.get(country.name.common)
   if (familiarRank !== undefined) return familiarRank < 22 ? 1 : 2
-  if (country.region === 'Europe') return 3
   if (country.subregion.includes('Caribbean') || country.subregion.includes('Polynesia') || country.subregion.includes('Micronesia') || country.subregion.includes('Melanesia')) return 5
   if (country.area < 5_000) return 5
   if (country.region === 'Africa') return 4

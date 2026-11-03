@@ -80,6 +80,8 @@ type CountryGlobeProps = {
   highlightCountry?: boolean
   markers?: GlobeMarker[]
   cameraDistance?: number
+  /** Stop the player zooming back out (used for streak close-ups). */
+  lockZoom?: boolean
   resetSignal: number
   onTargetPosition?: (position: { x: number; y: number }) => void
 }
@@ -495,6 +497,7 @@ export function CountryGlobe({
   highlightCountry = true,
   markers = [],
   cameraDistance = 6.7,
+  lockZoom = false,
   resetSignal,
   onTargetPosition,
 }: CountryGlobeProps) {
@@ -748,6 +751,10 @@ export function CountryGlobe({
 
     // Snap the camera back to this question's viewing distance and sync the
     // controls' saved state so a resetSignal reset() lands on the same spot.
+    // Widen the zoom limits to admit close-up distances; a locked close-up
+    // keeps the player from simply zooming back out to the normal view.
+    handles.controls.minDistance = Math.min(4.2, cameraDistance)
+    handles.controls.maxDistance = lockZoom ? cameraDistance : Math.max(9, cameraDistance)
     handles.camera.position.set(0, 0, cameraDistance)
     handles.controls.position0.copy(handles.camera.position)
     handles.controls.reset()
@@ -762,6 +769,7 @@ export function CountryGlobe({
     showIslandEnvelope,
     highlightCountry,
     cameraDistance,
+    lockZoom,
     targetMarkerId,
     markers.length,
   ])

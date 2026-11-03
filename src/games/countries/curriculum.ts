@@ -17,6 +17,8 @@ export type Country = {
   showIslandEnvelope: boolean
   /** ccn3 ids of bordering UN member countries. */
   neighbors: string[]
+  /** Land area in km². */
+  area: number
 }
 
 const aliasOverrides: Record<string, string[]> = {
@@ -46,14 +48,13 @@ const clueOverrides: Record<string, string> = {
 }
 
 // Familiar countries are probed on every sort comparison, so a Map replaces
-// repeated O(66) indexOf scans with a single O(1) lookup.
+// repeated indexOf scans with a single O(1) lookup.
 const familiarIndex = new Map<string, number>()
 familiarOrder.forEach((name, index) => familiarIndex.set(name, index))
 
 function rarityFor(country: (typeof worldCountries)[number]): 1 | 2 | 3 | 4 | 5 {
   const familiarRank = familiarIndex.get(country.name.common)
   if (familiarRank !== undefined) return familiarRank < 22 ? 1 : 2
-  if (country.region === 'Europe') return 3
   if (country.subregion.includes('Caribbean') || country.subregion.includes('Polynesia') || country.subregion.includes('Micronesia') || country.subregion.includes('Melanesia')) return 5
   if (country.area < 5_000) return 5
   if (country.region === 'Africa') return 4
@@ -120,6 +121,7 @@ export const countryCurriculum: Country[] = orderedCountries.map(({ country, rar
     // Dotted envelopes locate small or dispersed island states. Large,
     // immediately legible islands such as Australia do not need one.
     showIslandEnvelope: isIslandNation && country.area < 150_000,
+    area: country.area,
     neighbors: country.borders
       .map((border) => ccn3ByCca3.get(border))
       .filter((id): id is string => Boolean(id)),
@@ -192,4 +194,17 @@ export function countryOptions(question: Country, level: number, hard = false) {
   if (hard) return shuffle([question, ...shuffle(nearbyCountries(question)).slice(0, 3)])
   const pool = countriesForLevel(Math.max(level, 2)).filter((country) => country.id !== question.id)
   return shuffle([question, ...shuffle(pool).slice(0, 3)])
+}
+
+export const DEFAULT_CAMERA_DISTANCE = 6.7
+// Globe radius is 2, so these sit roughly 2.0 and 1.2 radii above the surface.
+const CLOSE_UP_DISTANCES = [DEFAULT_CAMERA_DISTANCE, 4, 3.2] as const
+
+/**
+ * Camera distance for a streak close-up. Very large countries would fill the
+ * whole view, so they are capped at a gentler level (or none at all).
+ */
+export function countryCameraDistance(country: Country, closeUp: 0 | 1 | 2) {
+  const maxLevel = country.area > 2_500_000 ? 0 : country.area > 800_000 ? 1 : 2
+  return CLOSE_UP_DISTANCES[Math.min(closeUp, maxLevel)]
 }
