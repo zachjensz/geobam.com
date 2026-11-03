@@ -15,6 +15,8 @@ export type Country = {
   showSmallCountryMarker?: boolean
   isIslandNation: boolean
   showIslandEnvelope: boolean
+  /** ccn3 ids of bordering UN member countries. */
+  neighbors: string[]
 }
 
 const aliasOverrides: Record<string, string[]> = {
@@ -58,6 +60,10 @@ function rarityFor(country: (typeof worldCountries)[number]): 1 | 2 | 3 | 4 | 5 
   if (country.area > 1_000_000) return 3
   return 4
 }
+
+const ccn3ByCca3 = new Map(
+  worldCountries.filter((country) => country.unMember).map((country) => [country.cca3, country.ccn3]),
+)
 
 const orderedCountries = worldCountries
   .filter((country) => country.unMember)
@@ -114,6 +120,9 @@ export const countryCurriculum: Country[] = orderedCountries.map(({ country, rar
     // Dotted envelopes locate small or dispersed island states. Large,
     // immediately legible islands such as Australia do not need one.
     showIslandEnvelope: isIslandNation && country.area < 150_000,
+    neighbors: country.borders
+      .map((border) => ccn3ByCca3.get(border))
+      .filter((id): id is string => Boolean(id)),
   }
   // Normalize the name and aliases once at module load so typed submissions
   // never re-normalize the whole catalogue per keystroke.
@@ -144,7 +153,43 @@ export function countriesForLevel(level: number) {
   return countriesUpToLevel[clamped] ?? []
 }
 
-export function countryOptions(question: Country, level: number) {
+/** Great-circle distance in kilometres between two [longitude, latitude] points. */
+function distanceKm([lon1, lat1]: [number, number], [lon2, lat2]: [number, number]) {
+  const radians = Math.PI / 180
+  const dLat = (lat2 - lat1) * radians
+  const dLon = (lon2 - lon1) * radians
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * radians) * Math.cos(lat2 * radians) * Math.sin(dLon / 2) ** 2
+  return 12_742 * Math.asin(Math.min(1, Math.sqrt(a)))
+}
+
+const NEARBY_CANDIDATES = 8
+const nearbyCache = new Map<string, Country[]>()
+
+/**
+ * The countries most easily confused with `question`: bordering countries
+ * first, then the closest by centroid. Borders matter for large countries
+ * whose centroids sit far from their neighbours' (Russia, Brazil, Canada).
+ */
+export function nearbyCountries(question: Country) {
+  const cached = nearbyCache.get(question.id)
+  if (cached) return cached
+  const neighbors = new Set(question.neighbors)
+  const nearby = countryCurriculum
+    .filter((country) => country.id !== question.id)
+    .map((country) => ({
+      country,
+      distance: distanceKm(question.focus, country.focus) * (neighbors.has(country.id) ? 0.35 : 1),
+    }))
+    .sort((first, second) => first.distance - second.distance)
+    .slice(0, NEARBY_CANDIDATES)
+    .map(({ country }) => country)
+  nearbyCache.set(question.id, nearby)
+  return nearby
+}
+
+export function countryOptions(question: Country, level: number, hard = false) {
+  if (hard) return shuffle([question, ...shuffle(nearbyCountries(question)).slice(0, 3)])
   const pool = countriesForLevel(Math.max(level, 2)).filter((country) => country.id !== question.id)
   return shuffle([question, ...shuffle(pool).slice(0, 3)])
 }

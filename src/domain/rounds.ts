@@ -15,6 +15,10 @@ export type ItemPerformance = {
   typedCompleted?: number
   lastMultipleChoiceAt?: number
   lastTypedAt?: number
+  /** Consecutive mastered rounds; drives how long the item is snoozed. */
+  masteryStreak?: number
+  /** Item is withheld from rounds until the practice clock reaches this value. */
+  snoozedUntil?: number
 }
 
 export type RecentResult = {
@@ -42,6 +46,71 @@ export function recentAccuracy(results: RecentResult[]) {
   return results.filter((result) => result.firstTryCorrect).length / results.length
 }
 
+/** A round at or above this first-try accuracy counts as mastered. */
+export const MASTERY_ROUND_ACCURACY = 0.7
+
+/** Practice clock values roughly equal to one ten-question round. */
+const ROUND_TICKS = 10
+const BASE_SNOOZE_ROUNDS = 4
+const MAX_SNOOZE_ROUNDS = 48
+
+/**
+ * The practice clock is the total number of completed answers across every
+ * item. It only advances while the player is actually practising, so snoozes
+ * are measured in rounds played rather than wall-clock time.
+ */
+export function practiceClock(performance: Record<string, ItemPerformance>) {
+  let total = 0
+  for (const stats of Object.values(performance)) total += stats?.completed ?? 0
+  return total
+}
+
+export function isSnoozed(stats: ItemPerformance | undefined, clock: number) {
+  return (stats?.snoozedUntil ?? 0) > clock
+}
+
+export function snoozeRoundsFor(streak: number) {
+  return Math.min(MAX_SNOOZE_ROUNDS, BASE_SNOOZE_ROUNDS * 2 ** Math.max(0, streak - 1))
+}
+
+/**
+ * After a round, items the player answered correctly first time are snoozed
+ * when the round as a whole was at least 70% correct. Each further mastered
+ * round doubles the snooze. A miss resets the streak so the item returns to
+ * normal rotation.
+ */
+export function applyRoundMastery(
+  performance: Record<string, ItemPerformance>,
+  roundResults: Record<string, boolean>,
+): Record<string, ItemPerformance> {
+  const ids = Object.keys(roundResults)
+  if (!ids.length) return performance
+  const correct = ids.filter((id) => roundResults[id]).length
+  const mastered = correct / ids.length >= MASTERY_ROUND_ACCURACY
+  const clock = practiceClock(performance)
+  const next = { ...performance }
+  for (const id of ids) {
+    const existing = next[id]
+    if (!existing) continue
+    if (!roundResults[id]) {
+      next[id] = { ...existing, masteryStreak: 0, snoozedUntil: undefined }
+    } else if (mastered) {
+      const streak = (existing.masteryStreak ?? 0) + 1
+      next[id] = {
+        ...existing,
+        masteryStreak: streak,
+        snoozedUntil: clock + snoozeRoundsFor(streak) * ROUND_TICKS,
+      }
+    }
+  }
+  return next
+}
+
+function bySnoozeExpiry<T extends Schedulable>(performance: Record<string, ItemPerformance>) {
+  return (first: T, second: T) =>
+    (performance[first.id]?.snoozedUntil ?? 0) - (performance[second.id]?.snoozedUntil ?? 0)
+}
+
 export function createRound<T extends Schedulable>(
   mode: RoundMode,
   curriculum: T[],
@@ -50,10 +119,13 @@ export function createRound<T extends Schedulable>(
   recentResults: RecentResult[],
 ): QuizQuestion<T>[] {
   let pool: T[]
+  const clock = practiceClock(performance)
+  const snoozed = (item: T) => isSnoozed(performance[item.id], clock)
 
   if (mode === 'typed') {
-    pool = [...curriculum]
-      .filter((item) => (completions[item.id] ?? 0) >= 2)
+    const ready = curriculum.filter((item) => (completions[item.id] ?? 0) >= 2)
+    const active = ready
+      .filter((item) => !snoozed(item))
       .sort((first, second) => {
         const firstStats = performance[first.id]
         const secondStats = performance[second.id]
@@ -63,40 +135,40 @@ export function createRound<T extends Schedulable>(
           || ((firstStats?.lastTypedAt ?? 0) - (secondStats?.lastTypedAt ?? 0))
           || (first.level - second.level)
       })
-      .slice(0, 10)
+    const resting = ready.filter(snoozed).sort(bySnoozeExpiry(performance))
+    pool = [...active, ...resting].slice(0, 10)
   } else {
     const accuracy = recentAccuracy(recentResults)
     const seenCount = curriculum.filter((item) => (completions[item.id] ?? 0) > 0).length
     const newItemTarget = seenCount < 10
       ? 10
-      : accuracy >= 0.9 ? 6
-        : accuracy >= 0.75 ? 5
-          : accuracy < 0.6 ? 2
-            : 4
-    const frontierSize = Math.min(
-      curriculum.length,
-      Math.max(10, seenCount + newItemTarget),
-    )
-    const eligible = curriculum.slice(0, frontierSize)
-    const unseen = eligible.filter((item) => (completions[item.id] ?? 0) === 0)
-    const needsSecondExposure = eligible
-      .filter((item) => (completions[item.id] ?? 0) === 1)
-      .sort((first, second) =>
-        (performance[first.id]?.lastMultipleChoiceAt ?? 0)
-        - (performance[second.id]?.lastMultipleChoiceAt ?? 0),
-      )
-    const maintenance = eligible
-      .filter((item) => (completions[item.id] ?? 0) >= 2)
-      .sort((first, second) =>
-        (performance[first.id]?.lastMultipleChoiceAt ?? 0)
-        - (performance[second.id]?.lastMultipleChoiceAt ?? 0),
-      )
+      : accuracy >= 0.9 ? 8
+        : accuracy >= 0.75 ? 6
+          : accuracy < 0.6 ? 3
+            : 5
+    const unseen = curriculum.filter((item) => (completions[item.id] ?? 0) === 0)
+    const byLastSeen = (first: T, second: T) =>
+      (performance[first.id]?.lastMultipleChoiceAt ?? 0)
+      - (performance[second.id]?.lastMultipleChoiceAt ?? 0)
+    const needsSecondExposure = curriculum
+      .filter((item) => (completions[item.id] ?? 0) === 1 && !snoozed(item))
+      .sort(byLastSeen)
+    const maintenance = curriculum
+      .filter((item) => (completions[item.id] ?? 0) >= 2 && !snoozed(item))
+      .sort(byLastSeen)
+    const resting = curriculum
+      .filter((item) => (completions[item.id] ?? 0) > 0 && snoozed(item))
+      .sort(bySnoozeExpiry(performance))
     const selectedUnseen = unseen.slice(0, Math.min(newItemTarget, 10))
+    // Snoozed items free up slots, which are filled with further new items
+    // before anything mastered is brought back early.
     pool = [
       ...selectedUnseen,
       ...needsSecondExposure.slice(0, 10 - selectedUnseen.length),
       ...maintenance,
       ...unseen.slice(selectedUnseen.length),
+      ...needsSecondExposure.slice(10 - selectedUnseen.length),
+      ...resting,
     ].slice(0, 10)
   }
 
