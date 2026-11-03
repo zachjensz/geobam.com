@@ -55,6 +55,13 @@ describe('curriculum balance', () => {
   it('keeps Europe to roughly its share of the first hundred countries', () => {
     const european = new Set(worldCountries.filter((country) => country.region === 'Europe').map((country) => country.ccn3))
     const first100 = countryCurriculum.slice(0, 100).filter((country) => european.has(country.id))
-    expect(first100.length).toBeLessThanOrEqual(25)
+    expect(first100.length).toBeLessThanOrEqual(18)
+  })
+
+  it('brings well-known African countries in early', () => {
+    const opening = countryCurriculum.slice(0, 40).map((country) => country.name)
+    for (const name of ['South Africa', 'Egypt', 'Kenya', 'Nigeria', 'Morocco', 'Ethiopia', 'Ghana', 'Madagascar', 'Tanzania', 'Algeria']) {
+      expect(opening).toContain(name)
+    }
   })
 })
