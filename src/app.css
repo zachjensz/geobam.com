@@ -712,6 +712,13 @@ footer p {
   letter-spacing: -0.025em;
 }
 
+.locate-hint {
+  margin: 0;
+  color: var(--muted, inherit);
+  font-size: 15px;
+  opacity: 0.8;
+}
+
 .answer-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
