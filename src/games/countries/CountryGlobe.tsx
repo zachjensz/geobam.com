@@ -11,10 +11,12 @@ import {
   MeshBasicMaterial,
   PerspectiveCamera,
   Quaternion,
+  Raycaster,
   RingGeometry,
   SRGBColorSpace,
   Scene,
   SphereGeometry,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three'
@@ -70,6 +72,14 @@ export type GlobeMarker = {
   role: 'target' | 'context'
 }
 
+export type GlobePick = {
+  /** ccn3 id of the clicked country, or null for open ocean. */
+  countryId: string | null
+  /** Screen distance in CSS pixels from the click to the target's focus point. */
+  pixelsFromTarget: number
+  screen: { x: number; y: number }
+}
+
 type CountryGlobeProps = {
   countryId: string
   countryName: string
@@ -82,6 +92,10 @@ type CountryGlobeProps = {
   cameraDistance?: number
   /** Stop the player zooming back out (used for streak close-ups). */
   lockZoom?: boolean
+  /** Point the globe faces at the start instead of `focus`. */
+  startFocus?: [longitude: number, latitude: number]
+  /** Called when the player clicks (not drags) the globe. */
+  onPick?: (pick: GlobePick) => void
   resetSignal: number
   onTargetPosition?: (position: { x: number; y: number }) => void
 }
@@ -471,6 +485,43 @@ function addCapitalMarkers(globe: Group, markers: GlobeMarker[]) {
   })
 }
 
+function ringContains(ring: number[][], longitude: number, latitude: number) {
+  let inside = false
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index, index += 1) {
+    const [x1, y1] = ring[index]
+    const [x2, y2] = ring[previous]
+    if ((y1 > latitude) !== (y2 > latitude)
+      && longitude < ((x2 - x1) * (latitude - y1)) / (y2 - y1) + x1) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+function featureContains(mapFeature: MapFeature, longitude: number, latitude: number) {
+  return polygonsOf(mapFeature.geometry).some((polygon) => {
+    // Test raw and antimeridian-unwrapped rings so polygons crossing ±180°
+    // (Russia, Fiji) still register clicks on either side.
+    const contains = (rings: number[][][]) =>
+      [longitude, longitude + 360, longitude - 360].some((lon) =>
+        ringContains(rings[0], lon, latitude)
+        && !rings.slice(1).some((hole) => ringContains(hole, lon, latitude)))
+    return contains(polygon) || contains(polygon.map(unwrapRing))
+  })
+}
+
+/** ccn3 id of the country at a point, preferring the detailed outlines. */
+export function countryAt(longitude: number, latitude: number) {
+  const detailed = detailedCountryFeatures.find((mapFeature) =>
+    featureContains(mapFeature, longitude, latitude))
+  if (detailed) return String(detailed.id)
+  const coarse = getWorldMap().features.find((mapFeature) => {
+    const featureId = String(mapFeature.id).padStart(3, '0')
+    return !detailedCountryIds.has(featureId) && featureContains(mapFeature, longitude, latitude)
+  })
+  return coarse ? String(coarse.id).padStart(3, '0') : null
+}
+
 export function preloadCountryMap(
   targetId: string,
   showIslandEnvelope: boolean,
@@ -498,9 +549,13 @@ export function CountryGlobe({
   markers = [],
   cameraDistance = 6.7,
   lockZoom = false,
+  startFocus,
+  onPick,
   resetSignal,
   onTargetPosition,
 }: CountryGlobeProps) {
+  const onPickRef = useRef(onPick)
+  onPickRef.current = onPick
   const hostRef = useRef<HTMLDivElement>(null)
   const controlsRef = useRef<OrbitControls | null>(null)
   const sceneHandlesRef = useRef<GlobeSceneHandles | null>(null)
@@ -653,6 +708,53 @@ export function CountryGlobe({
       requestRender()
     }
 
+    // A press that barely moves is a click on the map; anything longer is a
+    // globe drag handled by OrbitControls.
+    const raycaster = new Raycaster()
+    const pointer = new Vector2()
+    let pressStart: { x: number; y: number; at: number } | null = null
+    const onPointerDown = (event: PointerEvent) => {
+      pressStart = { x: event.clientX, y: event.clientY, at: performance.now() }
+    }
+    const onPointerUp = (event: PointerEvent) => {
+      const start = pressStart
+      pressStart = null
+      const pick = onPickRef.current
+      if (!start || !pick) return
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) return
+      if (performance.now() - start.at > 600) return
+      const bounds = renderer.domElement.getBoundingClientRect()
+      pointer.set(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        -((event.clientY - bounds.top) / bounds.height) * 2 + 1,
+      )
+      raycaster.setFromCamera(pointer, camera)
+      const hit = raycaster.intersectObject(sphere, false)[0]
+      if (!hit) return
+      const local = hit.point.clone().applyQuaternion(globe.quaternion.clone().invert()).normalize()
+      const latitude = 90 - MathUtils.radToDeg(Math.acos(MathUtils.clamp(local.y, -1, 1)))
+      let longitude = MathUtils.radToDeg(Math.atan2(local.z, -local.x)) - 180
+      if (longitude < -180) longitude += 360
+
+      const targetWorld = targetCenterRef.current.clone().applyQuaternion(globe.quaternion)
+      const facing = targetWorld.dot(camera.position.clone().normalize()) > 0.05
+      let pixelsFromTarget = Infinity
+      if (facing) {
+        const projected = targetWorld.multiplyScalar(GLOBE_RADIUS).project(camera)
+        pixelsFromTarget = Math.hypot(
+          bounds.left + (projected.x * 0.5 + 0.5) * bounds.width - event.clientX,
+          bounds.top + (-projected.y * 0.5 + 0.5) * bounds.height - event.clientY,
+        )
+      }
+      pick({
+        countryId: countryAt(longitude, latitude),
+        pixelsFromTarget,
+        screen: { x: event.clientX, y: event.clientY },
+      })
+    }
+    renderer.domElement.addEventListener('pointerdown', onPointerDown)
+    renderer.domElement.addEventListener('pointerup', onPointerUp)
+
     const observer = new ResizeObserver(resize)
     observer.observe(host)
     window.addEventListener('scroll', onScroll, { passive: true })
@@ -674,6 +776,8 @@ export function CountryGlobe({
       if (frame) cancelAnimationFrame(frame)
       if (resizeFrame !== null) cancelAnimationFrame(resizeFrame)
       observer.disconnect()
+      renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+      renderer.domElement.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('scroll', onScroll)
       controls.removeEventListener('change', requestRender)
       controls.dispose()
@@ -694,6 +798,8 @@ export function CountryGlobe({
     }
   }, [])
 
+  // Texture: changes when the highlighted country (or its reveal) changes,
+  // without disturbing where the player has turned the globe.
   useEffect(() => {
     const handles = sceneHandlesRef.current
     if (!handles) return
@@ -721,12 +827,16 @@ export function CountryGlobe({
     material.map = mapTexture
     material.needsUpdate = true
     handles.createdTextures.add(mapTexture)
+    handles.requestRender()
+  }, [countryId, showIslandEnvelope, highlightCountry])
 
+  // Markers on top of the persistent sphere. The marker meshes share
+  // module-scope geometry/material, so clearing the group is all the
+  // teardown they need.
+  useEffect(() => {
+    const handles = sceneHandlesRef.current
+    if (!handles) return
     const center = toPoint(focus[0], focus[1], 1).normalize()
-
-    // Rebuild this question's markers on top of the persistent sphere. The
-    // marker meshes share module-scope geometry/material, so clearing the
-    // group is all the teardown they need.
     handles.markerGroup.clear()
     if (markers.length) addCapitalMarkers(handles.markerGroup, markers)
     if (showSmallCountryMarker && !isIslandNation) {
@@ -735,13 +845,25 @@ export function CountryGlobe({
       marker.lookAt(center.clone().multiplyScalar(4))
       handles.markerGroup.add(marker)
     }
+    handles.requestRender()
+  }, [focus, showSmallCountryMarker, isIslandNation, targetMarkerId, markers.length])
 
-    const yaw = Math.atan2(-center.x, center.z)
+  // Orientation and camera: reset for each new question.
+  useEffect(() => {
+    const handles = sceneHandlesRef.current
+    if (!handles) return
+
+    const center = toPoint(focus[0], focus[1], 1).normalize()
+    const viewCenter = startFocus
+      ? toPoint(startFocus[0], startFocus[1], 1).normalize()
+      : center
+
+    const yaw = Math.atan2(-viewCenter.x, viewCenter.z)
     const yawRotation = new Quaternion().setFromAxisAngle(
       new Vector3(0, 1, 0),
       yaw,
     )
-    const yawedCenter = center.clone().applyQuaternion(yawRotation)
+    const yawedCenter = viewCenter.clone().applyQuaternion(yawRotation)
     const pitch = Math.atan2(yawedCenter.y, yawedCenter.z)
     const pitchRotation = new Quaternion().setFromAxisAngle(
       new Vector3(1, 0, 0),
@@ -761,18 +883,7 @@ export function CountryGlobe({
 
     targetCenterRef.current.copy(center)
     handles.requestRender()
-  }, [
-    countryId,
-    focus,
-    showSmallCountryMarker,
-    isIslandNation,
-    showIslandEnvelope,
-    highlightCountry,
-    cameraDistance,
-    lockZoom,
-    targetMarkerId,
-    markers.length,
-  ])
+  }, [countryId, focus, startFocus, cameraDistance, lockZoom, targetMarkerId])
 
   useEffect(() => {
     controlsRef.current?.reset()
@@ -783,7 +894,9 @@ export function CountryGlobe({
       ref={hostRef}
       class="country-globe"
       role="img"
-      aria-label={`Interactive globe highlighting ${countryName}`}
+      aria-label={onPick
+        ? `Interactive globe: click ${countryName}`
+        : `Interactive globe highlighting ${countryName}`}
     >
       {insetMap ? (
         <div class="country-inset-map" aria-hidden="true">

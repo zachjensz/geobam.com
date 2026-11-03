@@ -31,6 +31,9 @@ export type LocationQuizCopy = {
   returnLabel: string
   roundCompleteBody: string
   typedInputId: string
+  /** Prompt for locate rounds; `{name}` is replaced with the item's name. */
+  locatePrompt?: string
+  locateReturnLabel?: string
 }
 
 export type QuestionChallenge = {
@@ -41,6 +44,22 @@ export type QuestionChallenge = {
    * tight close-up. Only rolled during a long first-try streak.
    */
   closeUp: 0 | 1 | 2
+  /** True when the player must find the item on the globe themselves. */
+  locate: boolean
+  /** Random starting view for locate questions. */
+  startFocus?: [longitude: number, latitude: number]
+}
+
+export type GlobeActions = {
+  /** Submit an answer by name (locate rounds submit the clicked place). */
+  submitAnswer: (answer: string) => void
+  /** The answer has been found, so the globe may reveal the item. */
+  revealed: boolean
+}
+
+/** A random view of the inhabited latitudes for locate rounds. */
+export function randomStartFocus(random = Math.random): [number, number] {
+  return [random() * 360 - 180, random() * 110 - 50]
 }
 
 /** Recent first-try accuracy that switches multiple choice to near-miss options. */
@@ -87,10 +106,13 @@ type LocationQuizProps<T extends QuizItem> = {
     resetSignal: number,
     onTargetPosition: (position: { x: number; y: number }) => void,
     challenge: QuestionChallenge,
+    actions: GlobeActions,
   ) => ComponentChildren
   preloadNext?: (item: T) => void
   /** Roll streak close-up zoom challenges (the globe must honour `closeUp`). */
   closeUps?: boolean
+  /** Include locate rounds, where the player clicks the named item on the globe. */
+  locateRounds?: boolean
 }
 
 type TransitionDocument = Document & {
@@ -162,6 +184,7 @@ export function LocationQuiz<T extends QuizItem>({
   renderGlobe,
   preloadNext,
   closeUps = false,
+  locateRounds = false,
 }: LocationQuizProps<T>) {
   const level = Math.floor(xp / 100) + 1
   const initialRecords = useMemo(() => {
@@ -180,6 +203,7 @@ export function LocationQuiz<T extends QuizItem>({
   // whether the round counts as mastered.
   const [roundResults, setRoundResults] = useState<Record<string, boolean>>({})
   const [activeRoundMode, setActiveRoundMode] = useState<RoundMode>('multiple-choice')
+  const [roundNumber, setRoundNumber] = useState(0)
   const [queue, setQueue] = useState<QuizQuestion<T>[]>(
     () => createRound(
       'multiple-choice',
@@ -217,17 +241,20 @@ export function LocationQuiz<T extends QuizItem>({
   const question = queue[0]
   const questionAttempts = question ? attempts[question.instanceId] ?? 0 : 0
   const typedMode = question?.mode === 'typed'
+  const locateMode = question?.mode === 'locate'
   // Rolled once per question so re-renders never change the zoom or options.
   const challenge = useMemo<QuestionChallenge>(
     () => ({
       hard: recentResults.length >= HARD_OPTIONS_MIN_RESULTS
         && recentAccuracy(recentResults) >= HARD_OPTIONS_ACCURACY,
-      closeUp: closeUps ? rollCloseUp(firstTryStreak(recentResults)) : 0,
+      closeUp: closeUps && !locateMode ? rollCloseUp(firstTryStreak(recentResults)) : 0,
+      locate: locateMode,
+      startFocus: locateMode ? randomStartFocus() : undefined,
     }),
     [question?.instanceId],
   )
   const options = useMemo(
-    () => question ? optionsFor(question.item, challenge) : [],
+    () => question && !locateMode && !typedMode ? optionsFor(question.item, challenge) : [],
     [question?.instanceId],
   )
 
@@ -311,8 +338,8 @@ export function LocationQuiz<T extends QuizItem>({
     keyboardSelectionRef.current = null
     if (isAcceptedAnswer(question.item, answer, curriculum)) {
       const responseMs = Math.max(1, performance.now() - answerStartedAtRef.current)
-      const speed = speedReward(question.item, responseMs, typedMode, questionAttempts)
-      const baseXp = Math.max(5, (typedMode ? 25 : 20) - questionAttempts * 5)
+      const speed = speedReward(question.item, responseMs, question.mode, questionAttempts)
+      const baseXp = Math.max(5, (question.mode === 'multiple-choice' ? 20 : 25) - questionAttempts * 5)
       const earned = baseXp + speed.bonus
       const fastAnswer = speed.bonus >= 5
       setIsTransitioning(true)
@@ -325,7 +352,7 @@ export function LocationQuiz<T extends QuizItem>({
           document.documentElement.classList.remove('very-quick-correct')
         }, 700)
       }
-      if (!typedMode) {
+      if (question.mode === 'multiple-choice') {
         setMultipleChoiceCompletions((current) => {
           const next = {
             ...current,
@@ -351,12 +378,14 @@ export function LocationQuiz<T extends QuizItem>({
             totalAttempts: existing.totalAttempts + questionAttempts + 1,
             lastCompletedAt: Date.now(),
             multipleChoiceCompleted:
-              (existing.multipleChoiceCompleted ?? 0) + (typedMode ? 0 : 1),
+              (existing.multipleChoiceCompleted ?? 0) + (question.mode === 'multiple-choice' ? 1 : 0),
             typedCompleted: (existing.typedCompleted ?? 0) + (typedMode ? 1 : 0),
-            lastMultipleChoiceAt: typedMode
-              ? existing.lastMultipleChoiceAt
-              : Date.now(),
+            locateCompleted: (existing.locateCompleted ?? 0) + (locateMode ? 1 : 0),
+            lastMultipleChoiceAt: question.mode === 'multiple-choice'
+              ? Date.now()
+              : existing.lastMultipleChoiceAt,
             lastTypedAt: typedMode ? Date.now() : existing.lastTypedAt,
+            lastLocateAt: locateMode ? Date.now() : existing.lastLocateAt,
           },
         }
         window.localStorage.setItem(storageKeys.performance, JSON.stringify(next))
@@ -408,12 +437,15 @@ export function LocationQuiz<T extends QuizItem>({
       setFeedback((current) => current?.status === 'incorrect' ? null : current)
     }, 680)
     setAttempts({ ...attempts, [question.instanceId]: nextAttempts })
+    const missPrefix = locateMode ? `That's ${answer}.` : 'Not quite.'
     if (nextAttempts === 1) {
-      setMessage(`Not quite. Hint: ${question.item.clue}`)
+      setMessage(`${missPrefix} Hint: ${question.item.clue}`)
     } else if (typedMode && nextAttempts >= 3) {
       setMessage(`Try again: ${namePattern(question.item.name, nextAttempts - 2)}`)
     } else {
-      setMessage('Not yet — this file will return shortly.')
+      setMessage(locateMode
+        ? `${missPrefix} This file will return shortly.`
+        : 'Not yet — this file will return shortly.')
     }
 
     if (nextAttempts >= 2 && queue.length > 1) {
@@ -432,7 +464,7 @@ export function LocationQuiz<T extends QuizItem>({
   })
 
   useEffect(() => {
-    if (typedMode || isTransitioning || roundComplete) return
+    if (typedMode || locateMode || isTransitioning || roundComplete) return
 
     const handleKeyboardAnswer = (event: KeyboardEvent) => {
       const keyIndex = ['a', 's', 'd', 'f'].indexOf(event.key.toLowerCase())
@@ -451,10 +483,14 @@ export function LocationQuiz<T extends QuizItem>({
 
     window.addEventListener('keydown', handleKeyboardAnswer)
     return () => window.removeEventListener('keydown', handleKeyboardAnswer)
-  }, [typedMode, isTransitioning, roundComplete, options])
+  }, [typedMode, locateMode, isTransitioning, roundComplete, options])
 
   const beginNextRound = () => {
-    const mode = nextRoundMode(activeRoundMode, curriculum, multipleChoiceCompletions)
+    const mode = nextRoundMode(activeRoundMode, curriculum, multipleChoiceCompletions, {
+      locate: locateRounds,
+      roundNumber,
+    })
+    if (mode !== 'multiple-choice') setRoundNumber((value) => value + 1)
     setActiveRoundMode(mode)
     const performance = applyRoundMastery(itemPerformance, roundResults)
     if (performance !== itemPerformance) {
@@ -513,7 +549,13 @@ export function LocationQuiz<T extends QuizItem>({
       <div class="quiz-topline">
         <div>
           <span>
-            {copy.fileLabel} · Level {level} · {activeRoundMode === 'typed' ? 'Typed verification' : 'Visual verification'}
+            {copy.fileLabel} · Level {level} · {
+              activeRoundMode === 'typed'
+                ? 'Typed verification'
+                : activeRoundMode === 'locate'
+                  ? 'Field location'
+                  : 'Visual verification'
+            }
           </span>
           <strong>{completed} / 10 resolved</strong>
         </div>
@@ -525,24 +567,33 @@ export function LocationQuiz<T extends QuizItem>({
       <div class="globe-stage">
         {renderGlobe(question.item, resetSignal, (position) => {
           targetPositionRef.current = position
-        }, challenge)}
+        }, challenge, {
+          submitAnswer,
+          revealed: feedback?.status === 'correct',
+        })}
         {challenge.closeUp ? (
           <span class="reset-globe close-up-badge" role="status">
             <span aria-hidden="true">⌖</span> Streak close-up{challenge.closeUp === 2 ? ' ×2' : ''}
           </span>
         ) : null}
         <button class="reset-globe" type="button" onClick={() => setResetSignal((value) => value + 1)}>
-          <span aria-hidden="true">◎</span> {copy.returnLabel}
+          <span aria-hidden="true">◎</span> {locateMode ? copy.locateReturnLabel ?? 'Return to start' : copy.returnLabel}
         </button>
       </div>
 
       <div class="answer-panel">
         <div class="answer-heading">
           <p class="kicker">Question {Math.min(completed + 1, 10)} / 10</p>
-          <h1>{message}</h1>
+          <h1>{
+            locateMode && message === copy.prompt
+              ? (copy.locatePrompt ?? 'Find {name} on the globe').replace('{name}', question.item.name)
+              : message
+          }</h1>
         </div>
 
-        {typedMode ? (
+        {locateMode ? (
+          <p class="locate-hint">Spin the globe and click the country.</p>
+        ) : typedMode ? (
           <TypedAnswerForm
             key={question.instanceId}
             inputId={copy.typedInputId}
