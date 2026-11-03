@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { capitalCurriculum, capitalMarkers, capitalOptions } from './curriculum'
 
 describe('capitalCurriculum', () => {
-  it('starts with familiar western capitals including Paris', () => {
+  it('starts with familiar capitals from several continents including Paris', () => {
     const opening = capitalCurriculum.slice(0, 10).map((capital) => capital.name)
     expect(opening[0]).toBe('Washington D.C.')
     expect(opening[1]).toBe('London')
     expect(opening[2]).toBe('Paris')
     expect(opening).toContain('Ottawa')
-    expect(opening).toContain('Dublin')
+    expect(opening).toContain('Tokyo')
+    expect(opening).toContain('Pretoria')
   })
 
   it('places less familiar African and Pacific capitals later', () => {

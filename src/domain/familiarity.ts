@@ -1,44 +1,44 @@
 // Order in which countries enter the curriculum. The opening stretch is
-// deliberately global — well-known countries from every continent are mixed in
-// early so the first rounds are not a tour of Europe. Smaller European states
-// are spread through the back half alongside comparable Asian, African and
-// American countries.
+// deliberately global — well-known countries from every continent, including
+// a steady stream of African countries, are mixed in early so the first rounds
+// are not a tour of Europe. Europe is held below its share of the world, with
+// the smaller European states saved for the back half.
 export const familiarOrder = [
   // 1–10
   'United States', 'United Kingdom', 'France', 'Canada', 'Australia',
-  'Japan', 'China', 'India', 'Brazil', 'Ireland',
+  'Japan', 'China', 'India', 'Brazil', 'South Africa',
   // 11–20
-  'Mexico', 'South Africa', 'Germany', 'Argentina', 'Italy',
-  'Egypt', 'Russia', 'Spain', 'New Zealand', 'Panama',
+  'Mexico', 'Egypt', 'Argentina', 'Germany', 'Kenya',
+  'Nigeria', 'Italy', 'New Zealand', 'Russia', 'Panama',
   // 21–40
-  'South Korea', 'Türkiye', 'Indonesia', 'Nigeria', 'Chile',
-  'Thailand', 'Saudi Arabia', 'Kenya', 'Peru', 'Norway',
-  'Vietnam', 'Colombia', 'Morocco', 'Philippines', 'Cuba',
-  'Pakistan', 'Iran', 'Greece', 'Israel', 'Ethiopia',
+  'Morocco', 'South Korea', 'Spain', 'Indonesia', 'Ethiopia',
+  'Chile', 'Türkiye', 'Thailand', 'Ghana', 'Peru',
+  'Saudi Arabia', 'Madagascar', 'Vietnam', 'Colombia', 'Ireland',
+  'Philippines', 'Tanzania', 'Cuba', 'Pakistan', 'Algeria',
   // 41–60
-  'Netherlands', 'Venezuela', 'United Arab Emirates', 'Ghana', 'Malaysia',
-  'Sweden', 'Mongolia', 'Jamaica', 'Ukraine', 'Kazakhstan',
-  'Bangladesh', 'Singapore', 'Costa Rica', 'Algeria', 'Portugal',
-  'Madagascar', 'Iraq', 'Sri Lanka', 'Switzerland', 'Tanzania',
+  'Iran', 'DR Congo', 'Israel', 'Venezuela', 'Norway',
+  'Senegal', 'United Arab Emirates', 'Malaysia', 'Greece', 'Uganda',
+  'Mongolia', 'Jamaica', 'Zimbabwe', 'Kazakhstan', 'Bangladesh',
+  'Tunisia', 'Singapore', 'Costa Rica', 'Netherlands', 'Angola',
   // 61–80
-  'Nepal', 'Ecuador', 'Poland', 'Bolivia', 'Afghanistan',
-  'Uruguay', 'DR Congo', 'Iceland', 'Qatar', 'Guatemala',
-  'Angola', 'Myanmar', 'Denmark', 'Libya', 'Cambodia',
-  'Zimbabwe', 'Belgium', 'Paraguay', 'Senegal', 'North Korea',
+  'Iraq', 'Ivory Coast', 'Sri Lanka', 'Sweden', 'Cameroon',
+  'Nepal', 'Ecuador', 'Rwanda', 'Ukraine', 'Libya',
+  'Bolivia', 'Namibia', 'Afghanistan', 'Uruguay', 'Somalia',
+  'Portugal', 'Qatar', 'Sudan', 'Guatemala', 'Botswana',
   // 81–100
-  'Finland', 'Uganda', 'Tunisia', 'Haiti', 'Dominican Republic',
-  'Austria', 'Sudan', 'Mozambique', 'Laos', 'Jordan',
-  'Lebanon', 'Croatia', 'Ivory Coast', 'Uzbekistan', 'Honduras',
-  'Czechia', 'Namibia', 'Oman', 'Fiji', 'Papua New Guinea',
+  'Myanmar', 'Switzerland', 'Zambia', 'Cambodia', 'Mozambique',
+  'Paraguay', 'Mali', 'North Korea', 'Poland', 'Haiti',
+  'Dominican Republic', 'Jordan', 'Lebanon', 'Iceland', 'Uzbekistan',
+  'Honduras', 'Oman', 'Fiji', 'Papua New Guinea', 'Denmark',
   // 101–120
-  'Cameroon', 'Hungary', 'Botswana', 'Syria', 'Zambia',
-  'Romania', 'El Salvador', 'Nicaragua', 'Rwanda', 'Bahamas',
-  'Malta', 'Mali', 'Kuwait', 'Georgia', 'Armenia',
-  'Somalia', 'Serbia', 'Trinidad and Tobago', 'Cyprus', 'Bulgaria',
+  'Belgium', 'Syria', 'Laos', 'Finland', 'El Salvador',
+  'Nicaragua', 'Austria', 'Bahamas', 'Kuwait', 'Georgia',
+  'Armenia', 'Croatia', 'Trinidad and Tobago', 'Czechia', 'Azerbaijan',
+  'Niger', 'Chad', 'Hungary', 'Yemen', 'Mauritius',
   // 121+: the remaining smaller European states, still interleaved
-  'Azerbaijan', 'Luxembourg', 'Yemen', 'Slovakia', 'Niger',
-  'Chad', 'Slovenia', 'Bhutan', 'Estonia', 'Mauritius',
-  'Latvia', 'Maldives', 'Lithuania', 'Brunei', 'Albania',
-  'Belize', 'Bosnia and Herzegovina', 'Turkmenistan', 'North Macedonia', 'Eritrea',
-  'Montenegro', 'Kyrgyzstan', 'Moldova', 'Tajikistan', 'Belarus',
+  'Romania', 'Bhutan', 'Malta', 'Maldives', 'Serbia',
+  'Brunei', 'Cyprus', 'Belize', 'Bulgaria', 'Turkmenistan',
+  'Luxembourg', 'Eritrea', 'Slovakia', 'Kyrgyzstan', 'Slovenia',
+  'Tajikistan', 'Estonia', 'Latvia', 'Lithuania', 'Albania',
+  'Bosnia and Herzegovina', 'North Macedonia', 'Montenegro', 'Moldova', 'Belarus',
 ]
