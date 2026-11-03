@@ -28,7 +28,7 @@ export function CountriesQuiz({ xp, onEarnXp, onUpdateSafePoint }: CountriesQuiz
           'Every country in this batch has been resolved. Your registry record now advances toward level {nextLevel}.',
         typedInputId: 'country-answer',
       }}
-      optionsFor={(country) => countryOptions(country, Math.max(2, country.level))}
+      optionsFor={(country, { hard }) => countryOptions(country, Math.max(2, country.level), hard)}
       preloadNext={(country) => preloadCountryMap(country.id, country.showIslandEnvelope)}
       renderGlobe={(country, resetSignal, onTargetPosition) => (
         <CountryGlobe

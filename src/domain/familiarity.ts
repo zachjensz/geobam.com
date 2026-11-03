@@ -1,15 +1,31 @@
+// Order in which countries enter the curriculum. The opening stretch is
+// deliberately global — well-known countries from every continent are mixed in
+// early so the first rounds are not a tour of Europe. Smaller European states
+// are spread through the back half alongside comparable Asian, African and
+// American countries.
 export const familiarOrder = [
-  'United States', 'United Kingdom', 'France', 'Canada', 'Ireland',
-  'Netherlands', 'Belgium', 'Switzerland', 'Norway', 'Sweden',
-  'Germany', 'Italy', 'Spain', 'Australia', 'Portugal', 'New Zealand',
-  'Austria', 'Denmark', 'Finland', 'Greece', 'Poland', 'Iceland',
-  'Malta', 'Cyprus', 'Luxembourg', 'Czechia', 'Hungary', 'Romania',
-  'Bulgaria', 'Croatia', 'Serbia', 'Slovakia', 'Slovenia', 'Estonia',
-  'Latvia', 'Lithuania', 'Albania', 'North Macedonia',
+  // 1–10
+  'United States', 'United Kingdom', 'France', 'Canada', 'Australia',
+  'Japan', 'China', 'India', 'Brazil', 'Ireland',
+  // 11–20
+  'Mexico', 'South Africa', 'Germany', 'Argentina', 'Italy',
+  'Egypt', 'Russia', 'Spain', 'New Zealand', 'Panama',
+  // 21–40
+  'South Korea', 'Türkiye', 'Indonesia', 'Norway', 'Chile',
+  'Nigeria', 'Thailand', 'Netherlands', 'Saudi Arabia', 'Kenya',
+  'Peru', 'Sweden', 'Vietnam', 'Colombia', 'Morocco',
+  'Greece', 'Philippines', 'Switzerland', 'Cuba', 'Israel',
+  // 41–60
+  'Portugal', 'Pakistan', 'Ukraine', 'Iran', 'Poland',
+  'Ethiopia', 'United Arab Emirates', 'Venezuela', 'Iceland', 'Singapore',
+  'Belgium', 'Jamaica', 'Malaysia', 'Denmark', 'Ghana',
+  'Mongolia', 'Finland', 'Costa Rica', 'Kazakhstan', 'Austria',
+  // 61+
+  'Bangladesh', 'Sri Lanka', 'Croatia', 'Nepal', 'Czechia',
+  'Madagascar', 'Hungary', 'Ecuador', 'Romania', 'Iraq',
+  'Bolivia', 'Malta', 'Algeria', 'Uruguay', 'Cyprus',
+  'Tanzania', 'Serbia', 'Qatar', 'Luxembourg', 'Bulgaria',
+  'Paraguay', 'Afghanistan', 'Slovakia', 'Guatemala', 'Slovenia',
+  'Estonia', 'Latvia', 'Lithuania', 'Albania', 'North Macedonia',
   'Bosnia and Herzegovina', 'Montenegro', 'Moldova',
-  'Japan', 'Mexico', 'Brazil', 'China', 'India', 'Russia', 'South Korea',
-  'Argentina', 'South Africa', 'Egypt', 'Türkiye', 'Indonesia',
-  'Saudi Arabia', 'United Arab Emirates', 'Thailand', 'Vietnam',
-  'Singapore', 'Israel', 'Ukraine', 'Chile', 'Colombia', 'Peru',
-  'Morocco', 'Nigeria',
 ]

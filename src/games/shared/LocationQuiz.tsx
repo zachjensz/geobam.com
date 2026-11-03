@@ -2,7 +2,9 @@ import type { ComponentChildren, Ref } from 'preact'
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { isAcceptedAnswer, namePattern } from '../../domain/answers'
 import {
+  applyRoundMastery,
   createRound,
+  recentAccuracy,
   loadJsonRecord,
   nextRoundMode,
   speedReward,
@@ -31,6 +33,15 @@ export type LocationQuizCopy = {
   typedInputId: string
 }
 
+export type OptionsContext = {
+  /** True once the player is answering at least 90% of recent questions first time. */
+  hard: boolean
+}
+
+/** Recent first-try accuracy that switches multiple choice to near-miss options. */
+export const HARD_OPTIONS_ACCURACY = 0.9
+const HARD_OPTIONS_MIN_RESULTS = 10
+
 type LocationQuizProps<T extends QuizItem> = {
   xp: number
   onEarnXp: (amount: number) => void
@@ -41,7 +52,7 @@ type LocationQuizProps<T extends QuizItem> = {
     performance: string
   }
   copy: LocationQuizCopy
-  optionsFor: (item: T) => T[]
+  optionsFor: (item: T, context: OptionsContext) => T[]
   renderGlobe: (
     item: T,
     resetSignal: number,
@@ -132,6 +143,9 @@ export function LocationQuiz<T extends QuizItem>({
     initialRecords.performance,
   )
   const [recentResults, setRecentResults] = useState<RecentResult[]>([])
+  // First-try outcome for each item in the current round, used to decide
+  // whether the round counts as mastered.
+  const [roundResults, setRoundResults] = useState<Record<string, boolean>>({})
   const [activeRoundMode, setActiveRoundMode] = useState<RoundMode>('multiple-choice')
   const [queue, setQueue] = useState<QuizQuestion<T>[]>(
     () => createRound(
@@ -171,7 +185,12 @@ export function LocationQuiz<T extends QuizItem>({
   const questionAttempts = question ? attempts[question.instanceId] ?? 0 : 0
   const typedMode = question?.mode === 'typed'
   const options = useMemo(
-    () => question ? optionsFor(question.item) : [],
+    () => question
+      ? optionsFor(question.item, {
+        hard: recentResults.length >= HARD_OPTIONS_MIN_RESULTS
+          && recentAccuracy(recentResults) >= HARD_OPTIONS_ACCURACY,
+      })
+      : [],
     [question?.instanceId],
   )
 
@@ -306,6 +325,11 @@ export function LocationQuiz<T extends QuizItem>({
         window.localStorage.setItem(storageKeys.performance, JSON.stringify(next))
         return next
       })
+      setRoundResults((current) => (
+        question.item.id in current
+          ? current
+          : { ...current, [question.item.id]: questionAttempts === 0 }
+      ))
       setRecentResults((current) => [
         ...current,
         {
@@ -395,7 +419,13 @@ export function LocationQuiz<T extends QuizItem>({
   const beginNextRound = () => {
     const mode = nextRoundMode(activeRoundMode, curriculum, multipleChoiceCompletions)
     setActiveRoundMode(mode)
-    setQueue(createRound(mode, curriculum, multipleChoiceCompletions, itemPerformance, recentResults))
+    const performance = applyRoundMastery(itemPerformance, roundResults)
+    if (performance !== itemPerformance) {
+      window.localStorage.setItem(storageKeys.performance, JSON.stringify(performance))
+      setItemPerformance(performance)
+    }
+    setRoundResults({})
+    setQueue(createRound(mode, curriculum, multipleChoiceCompletions, performance, recentResults))
     setCompleted(0)
     setAttempts({})
     setRoundComplete(false)
