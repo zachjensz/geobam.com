@@ -2518,3 +2518,11 @@ footer p {
     text-align: right;
   }
 }
+
+/* Shares the reset button's look (both themes) but sits bottom-left and is not interactive. */
+.reset-globe.close-up-badge {
+  right: auto;
+  left: 12px;
+  cursor: default;
+  pointer-events: none;
+}
