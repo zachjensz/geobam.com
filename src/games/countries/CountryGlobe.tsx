@@ -28,8 +28,8 @@ import { detailedCountryFeatures, detailedCountryIds } from './detailedGeometry'
 // Shared marker resources: constant geometry/material parameters are created
 // once per page load and reused by every question's markers. They must never
 // be disposed, even when the globe scene is torn down.
-const contextMarkerGeometry = new CircleGeometry(0.004, 10)
-const targetMarkerGeometry = new CircleGeometry(0.01, 16)
+const contextMarkerGeometry = new CircleGeometry(0.007, 12)
+const targetMarkerGeometry = new CircleGeometry(0.016, 20)
 const contextMarkerMaterial = new MeshBasicMaterial({
   color: 0x243330,
   side: DoubleSide,
@@ -38,6 +38,8 @@ const targetMarkerMaterial = new MeshBasicMaterial({
   color: 0xd0a34e,
   side: DoubleSide,
 })
+// A halo around the target capital so it stands out from neighbouring dots.
+const targetHaloGeometry = new RingGeometry(0.022, 0.03, 28)
 const smallCountryMarkerGeometry = new RingGeometry(0.075, 0.105, 40)
 const smallCountryMarkerMaterial = new MeshBasicMaterial({
   color: 0x78966f,
@@ -479,9 +481,19 @@ function addCapitalMarkers(globe: Group, markers: GlobeMarker[]) {
       isTarget ? targetMarkerGeometry : contextMarkerGeometry,
       isTarget ? targetMarkerMaterial : contextMarkerMaterial,
     )
-    dot.position.copy(point.clone().multiplyScalar(GLOBE_RADIUS + 0.012))
+    // The target sits a hair higher and renders last so a crowded cluster of
+    // context dots can never cover it.
+    dot.position.copy(point.clone().multiplyScalar(GLOBE_RADIUS + (isTarget ? 0.014 : 0.012)))
     dot.lookAt(point.clone().multiplyScalar(4))
+    if (isTarget) dot.renderOrder = 1
     globe.add(dot)
+    if (isTarget) {
+      const halo = new Mesh(targetHaloGeometry, targetMarkerMaterial)
+      halo.position.copy(dot.position)
+      halo.quaternion.copy(dot.quaternion)
+      halo.renderOrder = 1
+      globe.add(halo)
+    }
   })
 }
 

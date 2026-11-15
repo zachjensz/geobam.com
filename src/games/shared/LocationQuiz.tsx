@@ -219,6 +219,12 @@ export function LocationQuiz<T extends QuizItem>({
   const [resetSignal, setResetSignal] = useState(0)
   const [roundComplete, setRoundComplete] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
+  // Wrong multiple-choice picks for the current question stay struck out so
+  // the player is not tempted to click them again.
+  const [eliminated, setEliminated] = useState<{ instanceId: string; names: string[] }>({
+    instanceId: '',
+    names: [],
+  })
   const [keyboardSelection, setKeyboardSelection] = useState<string | null>(null)
   const keyboardSelectionRef = useRef<string | null>(null)
   const submitAnswerRef = useRef<(answer: string) => void>(() => {})
@@ -253,6 +259,7 @@ export function LocationQuiz<T extends QuizItem>({
     }),
     [question?.instanceId],
   )
+  const eliminatedNames = eliminated.instanceId === question?.instanceId ? eliminated.names : []
   const options = useMemo(
     () => question && !locateMode && !typedMode ? optionsFor(question.item, challenge) : [],
     [question?.instanceId],
@@ -433,6 +440,13 @@ export function LocationQuiz<T extends QuizItem>({
 
     const nextAttempts = questionAttempts + 1
     setFeedback({ answer, status: 'incorrect' })
+    if (!typedMode && !locateMode) {
+      setEliminated({ instanceId: question.instanceId, names: [...eliminatedNames, answer] })
+    }
+    if (typedMode) {
+      // Select the wrong attempt so the next try replaces it without clearing.
+      requestAnimationFrame(() => typedInputRef.current?.select())
+    }
     window.setTimeout(() => {
       setFeedback((current) => current?.status === 'incorrect' ? null : current)
     }, 680)
@@ -468,7 +482,7 @@ export function LocationQuiz<T extends QuizItem>({
 
     const handleKeyboardAnswer = (event: KeyboardEvent) => {
       const keyIndex = ['a', 's', 'd', 'f'].indexOf(event.key.toLowerCase())
-      if (keyIndex !== -1 && options[keyIndex]) {
+      if (keyIndex !== -1 && options[keyIndex] && !eliminatedNames.includes(options[keyIndex].name)) {
         event.preventDefault()
         const selection = options[keyIndex].name
         setKeyboardSelection(selection)
@@ -483,7 +497,7 @@ export function LocationQuiz<T extends QuizItem>({
 
     window.addEventListener('keydown', handleKeyboardAnswer)
     return () => window.removeEventListener('keydown', handleKeyboardAnswer)
-  }, [typedMode, locateMode, isTransitioning, roundComplete, options])
+  }, [typedMode, locateMode, isTransitioning, roundComplete, options, eliminatedNames.length])
 
   const beginNextRound = () => {
     const mode = nextRoundMode(activeRoundMode, curriculum, multipleChoiceCompletions, {
@@ -610,13 +624,15 @@ export function LocationQuiz<T extends QuizItem>({
               <button
                 type="button"
                 onClick={() => submitAnswer(option.name)}
-                disabled={isTransitioning}
+                disabled={isTransitioning || eliminatedNames.includes(option.name)}
                 class={
                   feedback?.answer === option.name
                     ? `answer-option--${feedback.status}`
-                    : keyboardSelection === option.name
-                      ? 'answer-option--selected'
-                      : ''
+                    : eliminatedNames.includes(option.name)
+                      ? 'answer-option--eliminated'
+                      : keyboardSelection === option.name
+                        ? 'answer-option--selected'
+                        : ''
                 }
                 key={option.id}
               >

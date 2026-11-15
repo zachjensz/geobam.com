@@ -2533,3 +2533,14 @@ footer p {
   cursor: default;
   pointer-events: none;
 }
+
+/* A wrong pick stays struck out for the rest of the question. */
+.answer-options button.answer-option--eliminated,
+.answer-options button.answer-option--eliminated:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  text-decoration: line-through;
+  text-decoration-color: var(--registry-red, #985348);
+  text-decoration-thickness: 2px;
+}
